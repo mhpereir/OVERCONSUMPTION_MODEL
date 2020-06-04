@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 class PENG_model:
     def __init__(self): 
         self.logM_min = 2
-        self.logM_max = 6.0
+        self.logM_max = 5.5
         self.logM_std = 0.5
         
         #Cosmology params
