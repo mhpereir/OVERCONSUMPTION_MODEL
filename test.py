@@ -1,6 +1,7 @@
 import os, argparse
 import numpy as np
 import matplotlib.pyplot as plt
+#plt.rcParams.update({'font.size': 16, 'xtick.labelsize':14, 'ytick.labelsize':14})
 
 from model import PENG_model
 from utils import integration_utils
@@ -15,15 +16,17 @@ cluster_mass = 13.5  #log10(Mhalo)
 n_clusters   = 100
 
 oc_flag      = True      #
-oc_eta       = 2
+oc_eta       = 1
 
-logMh_range  = np.arange(9,14,0.1)
+logMh_range  = np.arange(9,15,0.1)
 logMs_range  = np.arange(0.5,11.5,0.1)
 Mh_range     = np.power(10, logMh_range)
 z_range      = np.arange(0,10,0.1)
 
 if __name__ == "__main__":
     model           = PENG_model()
+    
+    
     # model.sf_masses = 4.5
     # model.setup_evolve(10,0)
     
@@ -50,12 +53,23 @@ if __name__ == "__main__":
     
     ##!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!#
     
-    logMh = np.array([[brentq(model.M_star_inv(logMs,z), 5, 35 ) for z in z_range] for logMs in logMs_range])
+    # logMh = np.array([[brentq(model.M_star_inv(logMs,z), 5, 35 ) for z in z_range] for logMs in logMs_range])
+    
+    # fig,ax = plt.subplots()
+    # contourf_ = ax.contourf(z_range, logMs_range, logMh)#, np.arange(0,14,2), extend='both')
+    # cbar      = fig.colorbar(contourf_, label='Halo Mass')
+    # ax.set_xlabel('z')
+    # ax.set_ylabel('stellar mass')
+    
+    ##!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!#
     
     fig,ax = plt.subplots()
-    contourf_ = ax.contourf(z_range, logMs_range, logMh)#, np.arange(0,14,2), extend='both')
-    cbar      = fig.colorbar(contourf_, label='Halo Mass')
-    ax.set_xlabel('z')
-    ax.set_ylabel('stellar mass')
-    
+    for z in range(0,9):
+        f_s = model.M_star(Mh_range, z) / Mh_range
+        f_s[f_s<model.f_s_limit] = model.f_s_limit
+        ax.semilogy(logMh_range, f_s, label='z={}'.format(z))
+        ax.set_xlabel('Halo Mass [log($M_h/M_\odot$)]')
+        ax.set_ylabel('f$_*$')
+
+plt.legend()
 plt.show()

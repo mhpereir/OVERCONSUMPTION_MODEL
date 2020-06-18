@@ -2,6 +2,8 @@ import os, argparse
 
 import numpy as np
 
+from time import time
+
 from model import PENG_model
 from plot_utils import plot_results
 
@@ -9,7 +11,7 @@ z_init  = 10
 z_final = 0
 
 cluster_mass = 13.5  #log10(Mhalo)
-n_clusters   = 1000
+n_clusters   = 50000
 
 oc_flag      = True  # flag for overconsumption model. 
 oc_eta       = 0      # mass-loading factor
@@ -28,16 +30,20 @@ if __name__ == "__main__":
     model.setup_evolve(z_init, z_final)
     model.gen_cluster(cluster_mass, z_init, z_final, n_clusters, oc_flag, oc_eta)
     
+    start_time_1 = time()
     while model.t >= model.t_final and model.condition:
+        start_time_2 = time()
         model.evolve_field()
         model.evolve_cluster() # applies quenching conditions and the mass increase of the galaxies
-
+        
         model.grow_cluster()
         
         model.update_step() # advances t, z to next step
-    
+        
+        print('\t time per step: {:.2f}s'.format(time() - start_time_2))
         print('~~~~~~~~~~~~~~~~~~~~~~~')
-    
+    print('Total ellapsed time: {:.2f}s'.format(time() - start_time_1))
+                
     model.parse_masked_mass_field()
     model.parse_masked_mass_cluster()
     
