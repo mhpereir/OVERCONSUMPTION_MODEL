@@ -15,12 +15,12 @@ from utils import integration_utils
 #import matplotlib.pyplot as plt
 
 class PENG_model:
-    def __init__(self): 
-        self.logM_min = 1.5
-        self.logM_max = 12
-        self.logM_std = 0.5
-        
+    def __init__(self, params, z_i, z_f): 
+        self.logM_min  = 1.5
+        self.logM_max  = 12
+        self.logM_std  = 0.5
         self.f_s_limit = 1e-4   # lower limit in the stellar mass fraction of galaxy halo
+        
         
         #Cosmology params
         self.omega_m = 0.3
@@ -28,9 +28,12 @@ class PENG_model:
         self.h       = 0.7
         self.sigma_8 = 1.0
         
+        #Model params
+        self.z_init  = z_i
+        self.z_final = z_f
+        
+        # Global variables
         self.mass_history = []
-    
-        self.n_cores = 1
     
     ###  Schechter Stuff ###
     def schechter_SMF_prob(self, logMs):
@@ -72,12 +75,12 @@ class PENG_model:
         self.sf_masses = self.sf_masses[self.sf_masses < (self.logM_max - self.logM_std)]
         list_masses      = None
     
-    def setup_evolve(self, z_i, z_f):
-        t_init       = cosmo.lookback_time(z_i).value #gyr
-        self.t_final = cosmo.lookback_time(z_f).value #gyr
-
+    def setup_evolve(self):
+        t_init       = cosmo.lookback_time(self.z_init).value #gyr
+        self.t_final = cosmo.lookback_time(self.z_final).value #gyr
+        
         self.t  = t_init
-        self.z  = z_i
+        self.z  = self.z_init
 
         self.integ     = integration_utils(self.DE, hmax=1, hmin=1e-5, htol=1e1)
         self.condition = True                # Always run at least once
@@ -116,19 +119,22 @@ class PENG_model:
         prob_array[np.logical_not(self.mass_array.mask)]  = np.random.uniform(size=self.mass_array.count())
         self.mass_array                                   = np.ma.masked_where(death_func > prob_array, self.mass_array)
                 
-    def gen_cluster(self, cluster_mass, z_init, z_0, n_clusters, oc_flag, oc_eta):
+    def gen_cluster(self, cluster_mass, n_clusters, oc_flag, oc_eta):
         '''
         Generates the cluster. Samples N galaxies from the star forming galaxy array
         '''
         self.logM0     = cluster_mass
-        self.z_0       = z_0
+        self.z_0       = self.z_final
         self.n_cluster = n_clusters
-        self.oc_flag   = oc_flag
+        self.oc_flag   = oc_flag  #toggle for applying OC in the model
         self.oc_eta    = oc_eta
         
-        self.progenitor_mass = np.power(10, self.M_main(z_init))
+        self.MQ_flags  = []
+        self.OC_flags  = []
         
-        A_norm               = self.progenitor_mass / self.A_denom(z_init) * self.n_cluster
+        self.progenitor_mass = np.power(10, self.M_main(self.z_init))
+        
+        A_norm               = self.progenitor_mass / self.A_denom(self.z_init) * self.n_cluster
         
         temp_mass_array      = np.ma.copy(self.mass_array)
         temp_mass_array.mask = np.ma.nomask 
@@ -136,7 +142,7 @@ class PENG_model:
         Ms_min      = np.ma.min(temp_mass_array)
         Ms_max      = np.ma.max(temp_mass_array)
         
-        phi_sf_at_z = lambda x: self.phi_sf_interp(np.log10(x), z_init)
+        phi_sf_at_z = lambda x: self.phi_sf_interp(np.log10(x), self.z_init)
         N           = A_norm * quad(phi_sf_at_z, Ms_min, Ms_max, epsrel=1e-2)[0]
         N_floor     = int(np.floor(N))
         N_rest      = N - N_floor
@@ -167,15 +173,17 @@ class PENG_model:
                 self.cluster_masses            = np.ma.copy(self.mass_array[iii])
             
             self.infall_Ms                     = np.ma.copy(self.cluster_masses)
-            self.infall_Mh                     = self.find_M_halo(self.infall_Ms,z_init)       ###### z_init
+            self.infall_Mh                     = self.find_M_halo(self.infall_Ms,self.z_init)       ###### z_init
             
-            self.infall_z                      = np.ma.zeros(N) + z_init
+            self.infall_z                      = np.ma.zeros(N) + self.z_init
         
             self.mass_history.append(self.cluster_masses)
         
+        
+        
         if self.oc_flag and N!=0:
-            td              = np.ma.array(self.t_delay([self.cluster_masses, self.infall_Mh, z_init]))
-            self.death_date = cosmo.lookback_time(z_init).value - td
+            td              = np.ma.array(self.t_delay([self.cluster_masses, self.infall_Mh, self.z_init]))
+            self.death_date = cosmo.lookback_time(self.z_init).value - td
         
     def grow_cluster(self):
         new_progenitor_mass  = np.power(10, self.M_main(self.z))
@@ -238,16 +246,25 @@ class PENG_model:
                 new_arr_Ms                    = np.ma.zeros(n + N)
                 new_arr_Mh                    = np.ma.zeros(n + N)
                 
+                new_arr_flag_MQ               = np.ma.zeros(n + N)
+                
                 new_arr_mass[0:n]             = self.cluster_masses[:]
                 new_arr_z[0:n]                = self.infall_z[:]
                 new_arr_Ms[0:n]               = self.infall_Ms[:]
                 new_arr_Mh[0:n]               = self.infall_Mh[:]
+                new_arr_flag_MQ[0:n]          = self.MQ_flags[:]
                 
                 if N_floor > 0:               
                     new_arr_mass[n:n+N_floor] = np.ma.copy(self.mass_array[ii])
                     
                 if N == (N_floor+1):
                     new_arr_mass[-1]          = np.ma.copy(self.mass_array[iii])
+                
+                if self.oc_flag:
+                    new_arr_flag_OC               = np.ma.zeros(n + N)
+                    new_arr_flag_OC[0:n]          = self.OC_flags[:]
+                    self.OC_flags = new_arr_flag_OC
+                    
                 
                 new_arr_z[n:n+N]              = np.ma.zeros(N) + self.z
                 new_arr_Ms[n:n+N]             = np.ma.copy(new_arr_mass[n:n+N])
@@ -258,6 +275,8 @@ class PENG_model:
                 self.infall_z       = new_arr_z
                 self.infall_Ms      = new_arr_Ms
                 self.infall_Mh      = new_arr_Mh
+    
+                self.MQ_flags       = new_arr_flag_MQ
     
                 self.mass_history.append(self.cluster_masses)
     
@@ -285,16 +304,17 @@ class PENG_model:
             
             #mass_array = self.integ.RK45(mass_array, self.t, force=True)
             
-            self.update_death_date(mass_array)
-            
-            death_func = np.minimum( self.eta_m(np.log10(mass_array), self.z) * self.integ.step *1e9, np.ones(mass_array.shape))
-            prob_array  = np.ones(mass_array.shape)
+            death_func    = np.minimum( self.eta_m(np.ma.log10(mass_array), self.z) * self.integ.step *1e9, np.ones(mass_array.shape))
+            prob_array    = np.ones(mass_array.shape)
             prob_array[np.logical_not(mass_array.mask)]  = np.random.uniform(size=mass_array.count())
-            mass_array = np.ma.masked_where(death_func > prob_array, mass_array)
+            mass_array    = np.ma.masked_where(death_func > prob_array, mass_array)               
+            
+            self.MQ_flags = [death_func > prob_array][0]
             
             if self.oc_flag:
-                mass_array = np.ma.masked_where(self.death_date > self.t, mass_array)
-                
+                self.update_death_date(mass_array)
+                mass_array    = np.ma.masked_where(self.death_date > self.t, mass_array)
+                self.OC_flags = [self.death_date > self.t][0]
                 print(len(self.death_date[self.death_date > self.t]), len(self.death_date))
         
         self.cluster_masses = mass_array
@@ -363,17 +383,17 @@ class PENG_model:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     
     ### PENG Analytic Model ###
-    def gen_field_analytic(self, z_i, z_f):
+    def gen_field_analytic(self):
         self.logMStar_setup = np.arange(2, 12, 0.01)
         
         phi_init_sf = self.schechter_SMF_func(self.logMStar_setup)
         phi_init_q  = np.zeros(len(phi_init_sf))
         
-        t_init      = cosmo.lookback_time(z_i).value #gyr
-        t_final     = cosmo.lookback_time(z_f).value #gyr
+        t_init      = cosmo.lookback_time(self.z_init).value #gyr
+        t_final     = cosmo.lookback_time(self.z_final).value #gyr
         
         t  = t_init
-        z  = z_i
+        z  = self.z_init
 
         phi_sf      = [phi_init_sf]
         phi_q       = [phi_init_q]
@@ -456,8 +476,7 @@ class PENG_model:
     ### Overconsumption Delay times ###
     def t_delay(self, item):
         M_star, M_halo, z = item[0],item[1],item[2]
-        #print('doing something')
-        #sys.stdout.flush()
+        
         #delay time params
         f_bar   = 0.17
         f_strip = 0
