@@ -220,7 +220,7 @@ class plot_results:
             
             if p < prob_threshold:
                 
-                #ax.plot(tt, mass_history[:,i], color='k', alpha=0.01)
+                ax.plot(tt, mass_history[:,i], color='k', alpha=0.01)
                 
                 # if model.oc_flag:
                 #     if OC_flags[i]:
@@ -233,29 +233,30 @@ class plot_results:
                 #     ax.plot(tt, mass_history[:,i], color='r', alpha=0.01)
                 #     pass
                 
-                final_masses = mass_history[mass_history[:,i].mask == False, i]
+            
+                # final_masses = mass_history[mass_history[:,i].mask == False, i]
                 
-                
-                
-                try:
-                    if final_masses[0] > 8.9 and final_masses[0] < 9.1:
-                        temp = True
-                        if model.oc_flag:
-                            if OC_flags[i]:
-                                ax.plot(tt, mass_history[:,i], color='purple', alpha=0.5)
-                                count_oc += 1
-                                temp = False
+                # try:
+                #     if final_masses[0] > 8.9 and final_masses[0] < 9.1:
+                #         temp = True
+                #         if model.oc_flag:
+                #             if OC_flags[i]:
+                #                 ax.plot(tt, mass_history[:,i], color='purple', alpha=0.5)
+                #                 count_oc += 1
+                #                 temp = False
                                 
                         
-                        if MQ_flags[i] == 0 and temp:
-                            ax.plot(tt, mass_history[:,i], color='C0', alpha=0.5)
-                            count_sf += 1
-                        elif temp:
-                            ax.plot(tt, mass_history[:,i], color='r', alpha=0.5)
-                            count_mq += 1
-                            pass
-                except:
-                    pass
+                #         if MQ_flags[i] == 0 and temp:
+                #             ax.plot(tt, mass_history[:,i], color='C0', alpha=0.5)
+                #             count_sf += 1
+                #         elif temp:
+                #             ax.plot(tt, mass_history[:,i], color='r', alpha=0.5)
+                #             count_mq += 1
+                #             pass
+                # except:
+                #     pass
+            
+            
             
                 # final_masses = mass_history[mass_history[:,i].mask == False, i]
                 

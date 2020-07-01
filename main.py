@@ -14,9 +14,9 @@ z_final = 0
 n_galax = 1e6
 
 cluster_mass = 13.5  #log10(Mhalo)
-n_clusters   = 50000
+n_clusters   = 5000
 
-oc_flag      = False  # flag for overconsumption model. 
+oc_flag      = True  # flag for overconsumption model. 
 oc_eta       = 0     # mass-loading factor
 
 plot_flag    = True

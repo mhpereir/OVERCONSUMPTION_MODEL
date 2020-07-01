@@ -16,7 +16,7 @@ from utils import integration_utils
 
 class PENG_model:
     def __init__(self, params, z_i, z_f): 
-        self.logM_min  = 1.5
+        self.logM_min  = 2
         self.logM_max  = 12
         self.logM_std  = 0.5
         self.f_s_limit = 1e-4   # lower limit in the stellar mass fraction of galaxy halo
@@ -94,30 +94,34 @@ class PENG_model:
         else:
             k_minus = 0
         
-        logm_min         = np.log10(np.ma.min(self.mass_array))
-        logm_max         = np.log10(np.ma.max(self.mass_array))
-        logmass_range    = np.arange(logm_min*0.98, logm_max*1.02, 0.005)
-        mass_range       = np.power(10, logmass_range)
-        
-        mass_range_f     = self.integ.RK45(mass_range, self.t, self.force)
-        mass_evolve_func = interp1d(mass_range, mass_range_f)
-        
-        temp_arr                                              = np.array(self.mass_array[np.logical_not(self.mass_array.mask)], copy=True)
-        self.mass_array[np.logical_not(self.mass_array.mask)] = mass_evolve_func(temp_arr)
-        
-        #self.mass_array  = self.integ.RK45(self.mass_array, self.t, self.force)
-        
-        if (self.t - self.integ.step) > self.t_final:
+        if len(self.mass_array[np.logical_not(self.mass_array.mask)]) == 0:
             pass
         else:
-            self.integ.step = self.t - self.t_final
-            self.force      = True
-            self.condition  = False
-        
-        death_func  = np.minimum( self.eta_m(np.log10(self.mass_array), self.z) * self.integ.step *1e9, np.ones(self.mass_array.shape))
-        prob_array  = np.ones(self.mass_array.shape)
-        prob_array[np.logical_not(self.mass_array.mask)]  = np.random.uniform(size=self.mass_array.count())
-        self.mass_array                                   = np.ma.masked_where(death_func > prob_array, self.mass_array)
+            logm_min         = np.log10(np.ma.min(self.mass_array))
+            logm_max         = np.log10(np.ma.max(self.mass_array))
+            logmass_range    = np.arange(logm_min*0.98, logm_max*1.02, 0.005)
+            mass_range       = np.power(10, logmass_range)
+            
+            if len(mass_range) < len(self.mass_array[np.logical_not(self.mass_array.mask)]):
+                mass_range_f     = self.integ.RK45(mass_range, self.t, self.force)
+                mass_evolve_func = interp1d(mass_range, mass_range_f)
+                
+                temp_arr                                              = np.array(self.mass_array[np.logical_not(self.mass_array.mask)], copy=True)
+                self.mass_array[np.logical_not(self.mass_array.mask)] = mass_evolve_func(temp_arr)
+            else:
+                self.mass_array[np.logical_not(self.mass_array.mask)]  = self.integ.RK45(self.mass_array[np.logical_not(self.mass_array.mask)], self.t, self.force)
+            
+            if (self.t - self.integ.step) > self.t_final:
+                pass
+            else:
+                self.integ.step = self.t - self.t_final
+                self.force      = True
+                self.condition  = False
+            
+            death_func  = np.minimum( self.eta_m(np.log10(self.mass_array), self.z) * self.integ.step *1e9, np.ones(self.mass_array.shape))
+            prob_array  = np.ones(self.mass_array.shape)
+            prob_array[np.logical_not(self.mass_array.mask)]  = np.random.uniform(size=self.mass_array.count())
+            self.mass_array                                   = np.ma.masked_where(death_func > prob_array, self.mass_array)
                 
     def gen_cluster(self, cluster_mass, n_clusters, oc_flag, oc_eta):
         '''
@@ -288,21 +292,23 @@ class PENG_model:
         
         mass_array = np.ma.copy(self.cluster_masses)
         
-        if mass_array is None:
+        if self.cluster_masses is None or len(mass_array[np.logical_not(mass_array.mask)]) == 0:
             pass
         else:
+            
             logm_min      = np.log10(np.ma.min(mass_array))
             logm_max      = np.log10(np.ma.max(mass_array))
             logmass_range = np.arange(logm_min*0.98, logm_max*1.02, 0.005)
             mass_range    = np.power(10, logmass_range)
             
-            mass_range_f                                = self.integ.RK45(mass_range, self.t, force=True)
-            mass_evolve_func                            = interp1d(mass_range, mass_range_f)
-            
-            temp_arr                                    = np.array(mass_array[np.logical_not(mass_array.mask)], copy=True)
-            mass_array[np.logical_not(mass_array.mask)] = mass_evolve_func(temp_arr)
-            
-            #mass_array = self.integ.RK45(mass_array, self.t, force=True)
+            if len(mass_range) < len(mass_array[np.logical_not(mass_array.mask)]):
+                mass_range_f                                = self.integ.RK45(mass_range, self.t, force=True)
+                mass_evolve_func                            = interp1d(mass_range, mass_range_f)
+                
+                temp_arr                                    = np.array(mass_array[np.logical_not(mass_array.mask)], copy=True)
+                mass_array[np.logical_not(mass_array.mask)] = mass_evolve_func(temp_arr)
+            else:
+                mass_array[np.logical_not(mass_array.mask)] = self.integ.RK45(mass_array[np.logical_not(mass_array.mask)], self.t, force=True)
             
             death_func    = np.minimum( self.eta_m(np.ma.log10(mass_array), self.z) * self.integ.step *1e9, np.ones(mass_array.shape))
             prob_array    = np.ones(mass_array.shape)
@@ -317,7 +323,7 @@ class PENG_model:
                 self.OC_flags = [self.death_date > self.t][0]
                 print(len(self.death_date[self.death_date > self.t]), len(self.death_date))
         
-        self.cluster_masses = mass_array
+            self.cluster_masses = mass_array
     
     def update_death_date(self, mass_array):
         tt = time()
@@ -340,14 +346,22 @@ class PENG_model:
         
         not_masked   = np.logical_not(mass_array.mask)
         
-        infall_times = cosmo.lookback_time(self.infall_z[not_masked]).value
-        delay_times  = self.t_delay([mass_array[not_masked], self.infall_Mh[not_masked], self.infall_z[not_masked]])
         
-        #delay_times = pool.map( self.t_delay, ([ms,mh,z] for (ms,mh,z) in zip(mass_array[not_masked], self.infall_Mh[not_masked], self.infall_z[not_masked])))
         
-        death_date[not_masked] = infall_times - delay_times
+        if len(mass_array[not_masked]) == 0:
+            pass
+        else:
+            #print(mass_array[not_masked], len(mass_array[not_masked]))
+            
+            infall_times = cosmo.lookback_time(self.infall_z[not_masked]).value
+            delay_times  = self.t_delay([mass_array[not_masked], self.infall_Mh[not_masked], self.infall_z[not_masked]])
+            
+            #delay_times = pool.map( self.t_delay, ([ms,mh,z] for (ms,mh,z) in zip(mass_array[not_masked], self.infall_Mh[not_masked], self.infall_z[not_masked])))
+            
+            death_date[not_masked] = infall_times - delay_times
+        
         self.death_date        = death_date
-        
+            
         print('update death date: {}'.format(time() - tt))
     
     def update_step(self):
@@ -384,7 +398,7 @@ class PENG_model:
     
     ### PENG Analytic Model ###
     def gen_field_analytic(self):
-        self.logMStar_setup = np.arange(2, 12, 0.01)
+        self.logMStar_setup = np.arange(self.logM_min, 12, 0.01)
         
         phi_init_sf = self.schechter_SMF_func(self.logMStar_setup)
         phi_init_q  = np.zeros(len(phi_init_sf))
@@ -399,7 +413,7 @@ class PENG_model:
         phi_q       = [phi_init_q]
         z_range     = [z]
 
-        integ_an  = integration_utils(self.DE_2, hmax=0.1, hmin=1e-5, htol=1e-9)        #_an == analytic
+        integ_an  = integration_utils(self.DE_2, hmax=0.1, hmin=1e-5, htol=1e-3)        #_an == analytic
         condition = True                                                              # Always run at least once
         force     = False
         
@@ -417,6 +431,7 @@ class PENG_model:
                 integ_an.step = t - t_final
                 force      = True
                 condition  = False
+            
             
             t -= integ_an.step
             z  = z_at_value(cosmo.age,(cosmo.age(0).value - t)*u.Gyr, zmin=-1e-6)
@@ -471,6 +486,17 @@ class PENG_model:
         
         return ssfr ## per year
         
+    # def sSFR(self, logMs, z):
+    #     z_temp     = np.minimum(z,6)
+    #     logMs_temp = np.maximum(logMs, 8.5) 
+        
+    #     t    = cosmo.lookback_time(9999).value - cosmo.lookback_time(z_temp).value  ##
+        
+    #     logSFR = (0.84 - 0.026*t) * logMs_temp - (6.51 - 0.11*t)
+    #     ssfr   = np.power(10, logSFR) / np.power(10,logMs_temp)
+        
+    #     return  ssfr ## peryear
+
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     
     ### Overconsumption Delay times ###

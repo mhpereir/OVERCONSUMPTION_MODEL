@@ -1,7 +1,7 @@
 import os, argparse
 import numpy as np
 import matplotlib.pyplot as plt
-#plt.rcParams.update({'font.size': 16, 'xtick.labelsize':14, 'ytick.labelsize':14})
+plt.rcParams.update({'font.size': 16, 'xtick.labelsize':14, 'ytick.labelsize':14})
 
 from model import PENG_model
 from utils import integration_utils
@@ -24,7 +24,23 @@ Mh_range     = np.power(10, logMh_range)
 z_range      = np.arange(0,10,0.1)
 
 if __name__ == "__main__":
-    model           = PENG_model()
+    model           = PENG_model(None, z_init, z_final)
+    
+    ##!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!#
+    
+    sSFR = np.array([model.sSFR(logMs,z_range) for logMs in logMs_range ])
+    
+    fig,ax = plt.subplots(tight_layout=True)
+    contourf_ = ax.contourf(z_range, logMs_range, np.log10(sSFR) )#, np.arange(0,14,2), extend='both')
+    ax.set_title('Speagle log(sSFR)')
+    ax.set_xlabel('Redshift [z]')
+    ax.set_ylabel('Stellar Mass [log($M_*/M_\odot$)]')
+    plt.colorbar(contourf_)
+    
+    fig.savefig('./images/SPEAGLE_sSFR.png', dpi=220)
+    
+    ##!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!#
+    
     
     
     # model.sf_masses = 4.5
