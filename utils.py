@@ -9,6 +9,8 @@ class integration_utils():
         self.DE   = DE
         self.step = self.hmin
         
+        self.n_cores = 10
+        
     def RK45(self,inits,r,force):
         f          = self.DE
         #ignore_min = False
@@ -17,15 +19,7 @@ class integration_utils():
             if (r - self.step) < 0 and not force:
                 self.step = r
             
-            k1 = self.step*f(inits                                                              , r                 )
-            k2 = self.step*f(inits + 1/4.*k1                                                    , r-1/4.*self.step  )
-            k3 = self.step*f(inits + 3/32.*k1 + 9/32.*k2                                        , r-3/8.*self.step  )
-            k4 = self.step*f(inits + 1932/2197.*k1 - 7200/2197.*k2 + 7296/2197.*k3              , r-12/13.*self.step)
-            k5 = self.step*f(inits + 439/216.*k1 - 8*k2 + 3680/513.*k3 - 845/4104.*k4           , r-self.step       )
-            k6 = self.step*f(inits - 8/27.*k1 + 2*k2 - 3544/2565.*k3 + 1859/4104.*k4 - 11/40.*k5, r-1/2.*self.step  )
-                        
-            y1 = inits + 25/216.*k1 + 1408/2565.*k3 + 2197/4104.*k4 - 1/5.*k5
-            z1 = inits + 16/135.*k1 + 6656/12825.*k3 + 28561/56430.*k4 - 9/50.*k5 + 2/55.*k6
+            y1,z1 = self.list_operation((inits,f,r))
             
             if i == 0 and not force:
                 s = np.ma.min( (self.htol /(2*abs(z1-y1)))**(1/4.)  )         
@@ -50,3 +44,17 @@ class integration_utils():
                 break
             
         return y1
+    
+    def list_operation(self, ins):
+        inits, f, r = ins[0],ins[1],ins[2]
+        k1 = self.step*f(inits                                                              , r                 )
+        k2 = self.step*f(inits + 1/4.*k1                                                    , r-1/4.*self.step  )
+        k3 = self.step*f(inits + 3/32.*k1 + 9/32.*k2                                        , r-3/8.*self.step  )
+        k4 = self.step*f(inits + 1932/2197.*k1 - 7200/2197.*k2 + 7296/2197.*k3              , r-12/13.*self.step)
+        k5 = self.step*f(inits + 439/216.*k1 - 8*k2 + 3680/513.*k3 - 845/4104.*k4           , r-self.step       )
+        k6 = self.step*f(inits - 8/27.*k1 + 2*k2 - 3544/2565.*k3 + 1859/4104.*k4 - 11/40.*k5, r-1/2.*self.step  )
+                    
+        y1 = inits + 25/216.*k1 + 1408/2565.*k3 + 2197/4104.*k4 - 1/5.*k5
+        z1 = inits + 16/135.*k1 + 6656/12825.*k3 + 28561/56430.*k4 - 9/50.*k5 + 2/55.*k6
+        
+        return y1,z1

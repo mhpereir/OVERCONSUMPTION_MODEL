@@ -6,6 +6,7 @@ from time import time
 
 from model import PENG_model
 from plot_utils import plot_results
+from multiprocessing import Pool
 
 z_init_field   = 10
 z_init_cluster = 10
@@ -14,7 +15,7 @@ z_final = 0
 n_galax = 1e6
 
 cluster_mass = 13.5  #log10(Mhalo)
-n_clusters   = 5000
+n_clusters   = 10000
 
 oc_flag      = True  # flag for overconsumption model. 
 oc_eta       = 0     # mass-loading factor
@@ -24,6 +25,8 @@ savefigs     = True
 
 
 if __name__ == "__main__":
+    
+    p = Pool(6)
     
     with open("params.json") as paramfile:
         params = json.load(paramfile)
@@ -60,25 +63,28 @@ if __name__ == "__main__":
     
     model_f   = PENG_model(params, z_init_field, z_final)
     
-    model_f.gen_galaxies(n_galax)
-    #model_f.sf_masses = np.copy(model_c.sf_masses)  #save ourselves some time and re-use the initial SF population
-    model_f.gen_field_analytic()
-    
-    model_f.setup_evolve()
-    
-    start_time_1 = time()
-    while model_f.t >= model_f.t_final and model_f.condition:
-        '''
-        Generates the field, which can start at a different redshift from the cluster
-        '''
-        start_time_2 = time()
-        model_f.evolve_field()
+    if z_init_field ==  z_init_cluster:
+        model_f = model_c
+    else:
+        model_f.gen_galaxies(n_galax)
+        #model_f.sf_masses = np.copy(model_c.sf_masses)  #save ourselves some time and re-use the initial SF population
+        model_f.gen_field_analytic()
         
-        model_f.update_step() # advances t, z to next step
+        model_f.setup_evolve()
         
-        #print('\t time per step: {:.2f}s'.format(time() - start_time_2))
-        #print('~~~~~~~~~~~~~~~~~~~~~~~')
-    print('Total ellapsed time for Field: {:.2f}s'.format(time() - start_time_1))
+        start_time_1 = time()
+        while model_f.t >= model_f.t_final and model_f.condition:
+            '''
+            Generates the field, which can start at a different redshift from the cluster
+            '''
+            start_time_2 = time()
+            model_f.evolve_field()
+            
+            model_f.update_step() # advances t, z to next step
+            
+            #print('\t time per step: {:.2f}s'.format(time() - start_time_2))
+            #print('~~~~~~~~~~~~~~~~~~~~~~~')
+        print('Total ellapsed time for Field: {:.2f}s'.format(time() - start_time_1))
     
     model_f.parse_masked_mass_field()
     model_c.parse_masked_mass_cluster()
@@ -90,4 +96,5 @@ if __name__ == "__main__":
     
     print('Total stellar mass of cluster: ', np.log10(total_stel_mass_per_cluster))
     
+    p.close()
     

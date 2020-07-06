@@ -16,7 +16,7 @@ from utils import integration_utils
 
 class PENG_model:
     def __init__(self, params, z_i, z_f): 
-        self.logM_min  = 2
+        self.logM_min  = 1.5
         self.logM_max  = 12
         self.logM_std  = 0.5
         self.f_s_limit = 1e-4   # lower limit in the stellar mass fraction of galaxy halo
@@ -413,7 +413,7 @@ class PENG_model:
         phi_q       = [phi_init_q]
         z_range     = [z]
 
-        integ_an  = integration_utils(self.DE_2, hmax=0.1, hmin=1e-5, htol=1e-3)        #_an == analytic
+        integ_an  = integration_utils(self.DE_2, hmax=0.1, hmin=1e-5, htol=1e-9)        #_an == analytic
         condition = True                                                              # Always run at least once
         force     = False
         
@@ -429,9 +429,11 @@ class PENG_model:
                 pass
             else:
                 integ_an.step = t - t_final
-                force      = True
-                condition  = False
+                force         = True
+                condition     = False
             
+            
+            print(t, integ_an.step)
             
             t -= integ_an.step
             z  = z_at_value(cosmo.age,(cosmo.age(0).value - t)*u.Gyr, zmin=-1e-6)
@@ -459,32 +461,32 @@ class PENG_model:
         return N_b * lambda_m #- 0.027/4*(1+z)**(1.2)*N_r
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     
-    ### sSFR functions ###
-    # def sSFR(self, logMs, z):       # Schreiber+2015
-    #     Ms = np.power(10,logMs)
-    #     r = np.log10(1+z)
-    #     m = logMs - 9
-    #     m_0 = np.zeros(m.shape) + 0.5 # pm 0.07
-    #     m_1 = np.zeros(m.shape) + 0.36 # pm 0.3
-    #     a_0 = np.zeros(m.shape) + 1.5 # pm 0.15
-    #     a_1 = np.zeros(m.shape) + 0.3 # pm 0.08
-    #     a_2 = np.zeros(m.shape) + 2.5 # pm 0.6
+    ## sSFR functions ###
+    def sSFR(self, logMs, z):       # Schreiber+2015
+        Ms = np.power(10,logMs)
+        r = np.log10(1+z)
+        m = logMs - 9
+        m_0 = np.zeros(m.shape) + 0.5 # pm 0.07
+        m_1 = np.zeros(m.shape) + 0.36 # pm 0.3
+        a_0 = np.zeros(m.shape) + 1.5 # pm 0.15
+        a_1 = np.zeros(m.shape) + 0.3 # pm 0.08
+        a_2 = np.zeros(m.shape) + 2.5 # pm 0.6
                 
-    #     lsfr = m - m_0 + a_0 * r - a_1 * np.maximum(np.zeros(m.shape), m-m_1-a_2 * r)**2
-    #     ssfr = 10**(lsfr) / Ms 
-        
-    #     return ssfr ## per year
-    
-    def sSFR(self,logMs,z):          #PENG sSFR
-        z_temp = np.minimum(z,2)
-        #z_temp = z
-        t    = cosmo.lookback_time(9999).value - cosmo.lookback_time(z_temp).value  ##
-        Ms   = np.power(10,logMs)
-        beta = -0
-        
-        ssfr = 2.5e-9 * (Ms/(10e10))**(beta) * (t/3.5)**(-2.2)
+        lsfr = m - m_0 + a_0 * r - a_1 * np.maximum(np.zeros(m.shape), m-m_1-a_2 * r)**2
+        ssfr = 10**(lsfr) / Ms 
         
         return ssfr ## per year
+    
+    # def sSFR(self,logMs,z):          #PENG sSFR
+    #     z_temp = np.minimum(z,2)
+    #     #z_temp = z
+    #     t    = cosmo.lookback_time(9999).value - cosmo.lookback_time(z_temp).value  ##
+    #     Ms   = np.power(10,logMs)
+    #     beta = -0
+        
+    #     ssfr = 2.5e-9 * (Ms/(10e10))**(beta) * (t/3.5)**(-2.2)
+        
+    #     return ssfr ## per year
         
     # def sSFR(self, logMs, z):
     #     z_temp     = np.minimum(z,6)
@@ -492,7 +494,12 @@ class PENG_model:
         
     #     t    = cosmo.lookback_time(9999).value - cosmo.lookback_time(z_temp).value  ##
         
-    #     logSFR = (0.84 - 0.026*t) * logMs_temp - (6.51 - 0.11*t)
+    #     x_1 = 0.84  #+ np.random.normal(scale=0.02 )
+    #     x_2 = 0.026 #+ np.random.normal(scale=0.003)
+    #     x_3 = 6.51  #+ np.random.normal(scale=0.24)
+    #     x_4 = 0.11  #+ np.random.normal(scale=0.03)
+        
+    #     logSFR = (x_1 - x_2*t) * logMs_temp - (x_3 - x_4*t)
     #     ssfr   = np.power(10, logSFR) / np.power(10,logMs_temp)
         
     #     return  ssfr ## peryear
