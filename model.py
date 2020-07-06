@@ -16,17 +16,18 @@ from utils import integration_utils
 
 class PENG_model:
     def __init__(self, params, z_i, z_f): 
-        self.logM_min  = 1.5
-        self.logM_max  = 12
-        self.logM_std  = 0.5
-        self.f_s_limit = 1e-4   # lower limit in the stellar mass fraction of galaxy halo
+        self.logM_min  = params['model_setup']['logM_min']    # minimum sampled mass from init SF population
+        self.logM_max  = params['model_setup']['logM_max']    # maximum //
+        self.logM_std  = params['model_setup']['logM_std']    # std of MCMC - Metropolis-hastings sampler
+        self.f_s_limit = params['model_setup']['f_s_limit']   # lower limit in the stellar mass fraction of galaxy halo
         
+        sSFR_key       = params['model_setup']['sSFR']
         
         #Cosmology params
-        self.omega_m = 0.3
-        self.omega_b = 0.044
-        self.h       = 0.7
-        self.sigma_8 = 1.0
+        self.omega_m = params['cosmology']['omega_m']
+        self.omega_b = params['cosmology']['omega_b']
+        self.h       = params['cosmology']['h']
+        self.sigma_8 = params['cosmology']['sigma_8']
         
         #Model params
         self.z_init  = z_i
@@ -34,6 +35,16 @@ class PENG_model:
         
         # Global variables
         self.mass_history = []
+        
+        if sSFR_key == 'Peng' or sSFR_key == 'PENG':
+            self.sSFR = self.sSFR_peng
+        elif sSFR_key == 'Schreiber' or sSFR_key == 'SCHREIBER':
+            self.sSFR = self.sSFR_schreiber
+        elif sSFR_key == 'Speagle' or sSFR_key == 'SPEAGLE':
+            self.sSFR = self.sSFR_speagle
+        else:
+            print('Unrecognized sSFR. Try: Peng; Schreiber or Speagle.')
+            sys.exit()
     
     ###  Schechter Stuff ###
     def schechter_SMF_prob(self, logMs):
@@ -462,7 +473,7 @@ class PENG_model:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     
     ## sSFR functions ###
-    def sSFR(self, logMs, z):       # Schreiber+2015
+    def sSFR_schreiber(self, logMs, z):       # Schreiber+2015
         Ms = np.power(10,logMs)
         r = np.log10(1+z)
         m = logMs - 9
@@ -477,32 +488,32 @@ class PENG_model:
         
         return ssfr ## per year
     
-    # def sSFR(self,logMs,z):          #PENG sSFR
-    #     z_temp = np.minimum(z,2)
-    #     #z_temp = z
-    #     t    = cosmo.lookback_time(9999).value - cosmo.lookback_time(z_temp).value  ##
-    #     Ms   = np.power(10,logMs)
-    #     beta = -0
+    def sSFR_peng(self,logMs,z):          #PENG sSFR
+        z_temp = np.minimum(z,2)
+        #z_temp = z
+        t    = cosmo.lookback_time(9999).value - cosmo.lookback_time(z_temp).value  ##
+        Ms   = np.power(10,logMs)
+        beta = -0
         
-    #     ssfr = 2.5e-9 * (Ms/(10e10))**(beta) * (t/3.5)**(-2.2)
+        ssfr = 2.5e-9 * (Ms/(10e10))**(beta) * (t/3.5)**(-2.2)
         
-    #     return ssfr ## per year
+        return ssfr ## per year
         
-    # def sSFR(self, logMs, z):
-    #     z_temp     = np.minimum(z,6)
-    #     logMs_temp = np.maximum(logMs, 8.5) 
+    def sSFR_speagle(self, logMs, z):
+        z_temp     = np.minimum(z,6)
+        logMs_temp = np.maximum(logMs, 8.5) 
         
-    #     t    = cosmo.lookback_time(9999).value - cosmo.lookback_time(z_temp).value  ##
+        t    = cosmo.lookback_time(9999).value - cosmo.lookback_time(z_temp).value  ##
         
-    #     x_1 = 0.84  #+ np.random.normal(scale=0.02 )
-    #     x_2 = 0.026 #+ np.random.normal(scale=0.003)
-    #     x_3 = 6.51  #+ np.random.normal(scale=0.24)
-    #     x_4 = 0.11  #+ np.random.normal(scale=0.03)
+        x_1 = 0.84  #+ np.random.normal(scale=0.02 )
+        x_2 = 0.026 #+ np.random.normal(scale=0.003)
+        x_3 = 6.51  #+ np.random.normal(scale=0.24)
+        x_4 = 0.11  #+ np.random.normal(scale=0.03)
         
-    #     logSFR = (x_1 - x_2*t) * logMs_temp - (x_3 - x_4*t)
-    #     ssfr   = np.power(10, logSFR) / np.power(10,logMs_temp)
+        logSFR = (x_1 - x_2*t) * logMs_temp - (x_3 - x_4*t)
+        ssfr   = np.power(10, logSFR) / np.power(10,logMs_temp)
         
-    #     return  ssfr ## peryear
+        return  ssfr ## peryear
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     

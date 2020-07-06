@@ -1,3 +1,16 @@
 {
-"yeah":5
+    "model_setup" :{
+        "n_galaxy":1e6,
+        "logM_min":1.5,
+        "logM_max":12,
+        "logM_std":0.5,
+        "f_s_limit":1e-4,
+        "sSFR":"Speagle"
+    },
+    "cosmology" :{
+        "omega_m":0.3,
+        "omega_b":0.044,
+        "h"      :0.7,
+        "sigma_8":1
+    }
 }
