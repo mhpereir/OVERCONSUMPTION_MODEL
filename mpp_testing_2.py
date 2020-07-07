@@ -33,8 +33,8 @@ def main(number_of_task, arr,p):
     p.close()
 
 if __name__ == '__main__':
-    p        = Pool(8)
-    p_range  = range(1,13)
+    p        = Pool(4)
+    p_range  = range(1,5)
     sleep(2)
     
     n_range = np.power(10, range(4,8))

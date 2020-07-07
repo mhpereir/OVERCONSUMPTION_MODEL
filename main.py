@@ -8,11 +8,9 @@ from model import PENG_model
 from plot_utils import plot_results
 from multiprocessing import Pool
 
-z_init_field   = 10
-z_init_cluster = 10
-z_final = 0
-
-n_galax = 1e6
+z_init_field   = 6
+z_init_cluster = 6
+z_final = 1
 
 cluster_mass = 13.5  #log10(Mhalo)
 n_clusters   = 10000
@@ -24,12 +22,15 @@ plot_flag    = True
 savefigs     = True
 
 
+
 if __name__ == "__main__":
     
-    p = Pool(6)
+    p = Pool(4)
     
     with open("params.json") as paramfile:
         params = json.load(paramfile)
+    
+    n_galax   = params['model_setup']['n_galaxies']
     
     model_c   = PENG_model(params, z_init_cluster, z_final)  # initializes the model class
 

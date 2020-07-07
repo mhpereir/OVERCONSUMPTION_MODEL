@@ -21,7 +21,7 @@ class PENG_model:
         self.logM_std  = params['model_setup']['logM_std']    # std of MCMC - Metropolis-hastings sampler
         self.f_s_limit = params['model_setup']['f_s_limit']   # lower limit in the stellar mass fraction of galaxy halo
         
-        sSFR_key       = params['model_setup']['sSFR']
+        self.sSFR_key       = params['model_setup']['sSFR']
         
         #Cosmology params
         self.omega_m = params['cosmology']['omega_m']
@@ -36,14 +36,20 @@ class PENG_model:
         # Global variables
         self.mass_history = []
         
-        if sSFR_key == 'Peng' or sSFR_key == 'PENG':
-            self.sSFR = self.sSFR_peng
-        elif sSFR_key == 'Schreiber' or sSFR_key == 'SCHREIBER':
-            self.sSFR = self.sSFR_schreiber
-        elif sSFR_key == 'Speagle' or sSFR_key == 'SPEAGLE':
-            self.sSFR = self.sSFR_speagle
+        if self.sSFR_key == 'Peng' or self.sSFR_key == 'PENG':
+            self.sSFR            = self.sSFR_peng
+            self.gen_ssfr_params = None
+        
+        elif self.sSFR_key == 'Schreiber' or self.sSFR_key == 'SCHREIBER':
+            self.sSFR            = self.sSFR_schreiber
+            self.gen_ssfr_params = self.gen_ssfr_schreiber_params
+        
+        elif self.sSFR_key == 'Speagle' or self.sSFR_key == 'SPEAGLE':
+            self.sSFR            = self.sSFR_speagle
+            self.gen_ssfr_params = self.gen_ssfr_speagle_params
+        
         else:
-            print('Unrecognized sSFR. Try: Peng; Schreiber or Speagle.')
+            print('Unrecognized sSFR name. Try: Peng; Schreiber or Speagle.')
             sys.exit()
     
     ###  Schechter Stuff ###
@@ -81,10 +87,12 @@ class PENG_model:
         
         print('Time to generate population: {:.2f} m.'.format( (time() - start_time)/60  ))
         
-        self.sf_masses = np.array(list_masses)
-        self.sf_masses = self.sf_masses[self.sf_masses > (self.logM_min + self.logM_std)]
-        self.sf_masses = self.sf_masses[self.sf_masses < (self.logM_max - self.logM_std)]
+        self.sf_masses   = np.array(list_masses)
+        self.sf_masses   = self.sf_masses[self.sf_masses > (self.logM_min + self.logM_std)]
+        self.sf_masses   = self.sf_masses[self.sf_masses < (self.logM_max - self.logM_std)]
         list_masses      = None
+        
+        self.gen_ssfr_params(len(self.sf_masses))
     
     def setup_evolve(self):
         t_init       = cosmo.lookback_time(self.z_init).value #gyr
@@ -108,19 +116,7 @@ class PENG_model:
         if len(self.mass_array[np.logical_not(self.mass_array.mask)]) == 0:
             pass
         else:
-            logm_min         = np.log10(np.ma.min(self.mass_array))
-            logm_max         = np.log10(np.ma.max(self.mass_array))
-            logmass_range    = np.arange(logm_min*0.98, logm_max*1.02, 0.005)
-            mass_range       = np.power(10, logmass_range)
-            
-            if len(mass_range) < len(self.mass_array[np.logical_not(self.mass_array.mask)]):
-                mass_range_f     = self.integ.RK45(mass_range, self.t, self.force)
-                mass_evolve_func = interp1d(mass_range, mass_range_f)
-                
-                temp_arr                                              = np.array(self.mass_array[np.logical_not(self.mass_array.mask)], copy=True)
-                self.mass_array[np.logical_not(self.mass_array.mask)] = mass_evolve_func(temp_arr)
-            else:
-                self.mass_array[np.logical_not(self.mass_array.mask)]  = self.integ.RK45(self.mass_array[np.logical_not(self.mass_array.mask)], self.t, self.force)
+            self.mass_array[np.logical_not(self.mass_array.mask)]  = self.integ.RK45(self.mass_array[np.logical_not(self.mass_array.mask)], self.t, self.force)
             
             if (self.t - self.integ.step) > self.t_final:
                 pass
@@ -133,7 +129,7 @@ class PENG_model:
             prob_array  = np.ones(self.mass_array.shape)
             prob_array[np.logical_not(self.mass_array.mask)]  = np.random.uniform(size=self.mass_array.count())
             self.mass_array                                   = np.ma.masked_where(death_func > prob_array, self.mass_array)
-                
+            
     def gen_cluster(self, cluster_mass, n_clusters, oc_flag, oc_eta):
         '''
         Generates the cluster. Samples N galaxies from the star forming galaxy array
@@ -307,19 +303,7 @@ class PENG_model:
             pass
         else:
             
-            logm_min      = np.log10(np.ma.min(mass_array))
-            logm_max      = np.log10(np.ma.max(mass_array))
-            logmass_range = np.arange(logm_min*0.98, logm_max*1.02, 0.005)
-            mass_range    = np.power(10, logmass_range)
-            
-            if len(mass_range) < len(mass_array[np.logical_not(mass_array.mask)]):
-                mass_range_f                                = self.integ.RK45(mass_range, self.t, force=True)
-                mass_evolve_func                            = interp1d(mass_range, mass_range_f)
-                
-                temp_arr                                    = np.array(mass_array[np.logical_not(mass_array.mask)], copy=True)
-                mass_array[np.logical_not(mass_array.mask)] = mass_evolve_func(temp_arr)
-            else:
-                mass_array[np.logical_not(mass_array.mask)] = self.integ.RK45(mass_array[np.logical_not(mass_array.mask)], self.t, force=True)
+            mass_array[np.logical_not(mass_array.mask)] = self.integ.RK45(mass_array[np.logical_not(mass_array.mask)], self.t, force=True)
             
             death_func    = np.minimum( self.eta_m(np.ma.log10(mass_array), self.z) * self.integ.step *1e9, np.ones(mass_array.shape))
             prob_array    = np.ones(mass_array.shape)
@@ -464,30 +448,15 @@ class PENG_model:
     def dN_blue(self, logMs, z, N_b):
         alpha    = -1.3
         beta     = -0
-        lambda_m = (np.power(10,logMs)/np.power(10,10.6)) * self.sSFR(logMs,z)*1e9 
-        return N_b * (-(1 + alpha + beta - (np.power(10,logMs)/np.power(10,10.6)))*self.sSFR(logMs, z)*1e9 - lambda_m) # - 0.027/4*(1+z)**(1.2))
+        lambda_m = (np.power(10,logMs)/np.power(10,10.6)) * self.sSFR_an(logMs,z)*1e9 
+        return N_b * (-(1 + alpha + beta - (np.power(10,logMs)/np.power(10,10.6)))*self.sSFR_an(logMs, z)*1e9 - lambda_m) # - 0.027/4*(1+z)**(1.2))
     
     def dN_red(self, logMs, z, N_b):
-        lambda_m = (np.power(10,logMs)/np.power(10,10.6)) * self.sSFR(logMs,z)*1e9 
+        lambda_m = (np.power(10,logMs)/np.power(10,10.6)) * self.sSFR_an(logMs,z)*1e9 
         return N_b * lambda_m #- 0.027/4*(1+z)**(1.2)*N_r
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     
-    ## sSFR functions ###
-    def sSFR_schreiber(self, logMs, z):       # Schreiber+2015
-        Ms = np.power(10,logMs)
-        r = np.log10(1+z)
-        m = logMs - 9
-        m_0 = np.zeros(m.shape) + 0.5 # pm 0.07
-        m_1 = np.zeros(m.shape) + 0.36 # pm 0.3
-        a_0 = np.zeros(m.shape) + 1.5 # pm 0.15
-        a_1 = np.zeros(m.shape) + 0.3 # pm 0.08
-        a_2 = np.zeros(m.shape) + 2.5 # pm 0.6
-                
-        lsfr = m - m_0 + a_0 * r - a_1 * np.maximum(np.zeros(m.shape), m-m_1-a_2 * r)**2
-        ssfr = 10**(lsfr) / Ms 
-        
-        return ssfr ## per year
-    
+    ### sSFR functions ###
     def sSFR_peng(self,logMs,z):          #PENG sSFR
         z_temp = np.minimum(z,2)
         #z_temp = z
@@ -498,22 +467,74 @@ class PENG_model:
         ssfr = 2.5e-9 * (Ms/(10e10))**(beta) * (t/3.5)**(-2.2)
         
         return ssfr ## per year
+
+    def sSFR_schreiber(self, logMs, z):       # Schreiber+2015
+        Ms  = np.power(10,logMs)
+        r   = np.log10(1+z)
+        m   = logMs - 9
+        m_0 = self.ssfr_params[0,:]
+        m_1 = self.ssfr_params[1,:]
+        a_0 = self.ssfr_params[2,:]
+        a_1 = self.ssfr_params[3,:]
+        a_2 = self.ssfr_params[4,:]
+                
+        lsfr = m - m_0 + a_0 * r - a_1 * np.maximum(np.zeros(m.shape), m-m_1-a_2 * r)**2
+        ssfr = 10**(lsfr) / Ms 
+        
+        return ssfr ## per year
+    
+    def sSFR_schreiber_old(self, logMs, z):       # Schreiber+2015
+        Ms  = np.power(10,logMs)
+        r   = np.log10(1+z)
+        m   = logMs - 9
+        m_0 = 0.50
+        m_1 = 0.36
+        a_0 = 1.50
+        a_1 = 0.30
+        a_2 = 2.50
+                
+        lsfr = m - m_0 + a_0 * r - a_1 * np.maximum(np.zeros(m.shape), m-m_1-a_2 * r)**2
+        ssfr = 10**(lsfr) / Ms 
+        
+        return ssfr ## per year
+    
+    def gen_ssfr_schreiber_params(self, n):
+        m_0 = np.random.normal(loc=0.50, scale=0.07, size=n)
+        m_1 = np.random.normal(loc=0.36, scale=0.36, size=n)
+        a_0 = np.random.normal(loc=1.50, scale=0.15, size=n)
+        a_1 = np.random.normal(loc=0.30, scale=0.08, size=n)
+        a_2 = np.random.normal(loc=2.50, scale=0.60, size=n)
+        
+        self.ssfr_params = np.array([m_0, m_1, a_0, a_1, a_2])
         
     def sSFR_speagle(self, logMs, z):
         z_temp     = np.minimum(z,6)
         logMs_temp = np.maximum(logMs, 8.5) 
         
-        t    = cosmo.lookback_time(9999).value - cosmo.lookback_time(z_temp).value  ##
-        
-        x_1 = 0.84  #+ np.random.normal(scale=0.02 )
-        x_2 = 0.026 #+ np.random.normal(scale=0.003)
-        x_3 = 6.51  #+ np.random.normal(scale=0.24)
-        x_4 = 0.11  #+ np.random.normal(scale=0.03)
+        t   = cosmo.lookback_time(9999).value - cosmo.lookback_time(z_temp).value  ##  WARNING:: TRY cosmo.age(z).value instead!!
+        x_1 = self.ssfr_params[0,:]
+        x_2 = self.ssfr_params[1,:]
+        x_3 = self.ssfr_params[2,:]
+        x_4 = self.ssfr_params[3,:]
         
         logSFR = (x_1 - x_2*t) * logMs_temp - (x_3 - x_4*t)
         ssfr   = np.power(10, logSFR) / np.power(10,logMs_temp)
         
         return  ssfr ## peryear
+    
+    def gen_ssfr_speagle_params(self, n):
+        x_1 = np.random.normal(loc=0.840, scale=0.020, size=n)
+        x_2 = np.random.normal(loc=0.026, scale=0.003, size=n)
+        x_3 = np.random.normal(loc=6.510, scale=0.240, size=n)
+        x_4 = np.random.normal(loc=0.110, scale=0.030, size=n)
+
+        self.ssfr_params = np.array([x_1, x_2, x_3, x_4])
+        
+    def update_ssfr_params(self):
+        
+        ### if enough time has passed, switch up the params
+        
+        pass
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     
@@ -672,8 +693,6 @@ class PENG_model:
         '''
         Denominator of normalization constant A
         '''
-        #Mh_min = np.power(10, newton_krylov(self.M_star_inv(np.ma.min(self.sf_masses),z), 7  + (10-z)/3 ))
-        #Mh_max = np.power(10, newton_krylov(self.M_star_inv(np.ma.max(self.sf_masses),z), 14 + (10-z)/2 ))
         
         temp_mass_array      = np.ma.copy(self.mass_array)
         temp_mass_array.mask = np.ma.nomask

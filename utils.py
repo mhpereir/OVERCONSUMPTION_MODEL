@@ -9,8 +9,6 @@ class integration_utils():
         self.DE   = DE
         self.step = self.hmin
         
-        self.n_cores = 10
-        
     def RK45(self,inits,r,force):
         f          = self.DE
         #ignore_min = False
