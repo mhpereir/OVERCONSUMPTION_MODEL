@@ -38,14 +38,17 @@ class PENG_model:
         
         if self.sSFR_key == 'Peng' or self.sSFR_key == 'PENG':
             self.sSFR            = self.sSFR_peng
+            self.sSFR_an         = self.sSFR_peng
             self.gen_ssfr_params = None
         
         elif self.sSFR_key == 'Schreiber' or self.sSFR_key == 'SCHREIBER':
             self.sSFR            = self.sSFR_schreiber
+            self.sSFR_an         = self.sSFR_schreiber_old
             self.gen_ssfr_params = self.gen_ssfr_schreiber_params
         
         elif self.sSFR_key == 'Speagle' or self.sSFR_key == 'SPEAGLE':
             self.sSFR            = self.sSFR_speagle
+            self.sSFR_an         = self.sSFR_speagle_old
             self.gen_ssfr_params = self.gen_ssfr_speagle_params
         
         else:
@@ -87,12 +90,10 @@ class PENG_model:
         
         print('Time to generate population: {:.2f} m.'.format( (time() - start_time)/60  ))
         
-        self.sf_masses   = np.array(list_masses)
+        self.sf_masses   = np.array(list_masses, copy=True)
         self.sf_masses   = self.sf_masses[self.sf_masses > (self.logM_min + self.logM_std)]
         self.sf_masses   = self.sf_masses[self.sf_masses < (self.logM_max - self.logM_std)]
         list_masses      = None
-        
-        self.gen_ssfr_params(len(self.sf_masses))
     
     def setup_evolve(self):
         t_init       = cosmo.lookback_time(self.z_init).value #gyr
@@ -106,17 +107,21 @@ class PENG_model:
         self.force     = False
 
         self.mass_array = np.ma.power(10, np.array(self.sf_masses, copy=True))
+        
+        self.ssfr_params = self.gen_ssfr_params(len(self.sf_masses))
     
-    def evolve_field(self):        
+    def evolve_field(self, p):        
         if self.z <= 3:
             k_minus = 0.027/4/np.sqrt(1+self.z)/1e9     #merging is turned-off at z>3, PENG+2010
         else:
             k_minus = 0
         
-        if len(self.mass_array[np.logical_not(self.mass_array.mask)]) == 0:
+        mass_mask = np.logical_not(self.mass_array.mask)
+        if len(self.mass_array[mass_mask]) == 0:
             pass
         else:
-            self.mass_array[np.logical_not(self.mass_array.mask)]  = self.integ.RK45(self.mass_array[np.logical_not(self.mass_array.mask)], self.t, self.force)
+            inits                       = (self.mass_array[mass_mask], self.ssfr_params[:,mass_mask])
+            self.mass_array[mass_mask]  = self.integ.RK45(p, inits, self.t, self.force, mpp=True, analytic=False)
             
             if (self.t - self.integ.step) > self.t_final:
                 pass
@@ -125,10 +130,13 @@ class PENG_model:
                 self.force      = True
                 self.condition  = False
             
-            death_func  = np.minimum( self.eta_m(np.log10(self.mass_array), self.z) * self.integ.step *1e9, np.ones(self.mass_array.shape))
+            death_func  = np.minimum( self.eta_m(np.log10(self.mass_array), self.z, self.ssfr_params) * self.integ.step *1e9, np.ones(self.mass_array.shape))
             prob_array  = np.ones(self.mass_array.shape)
-            prob_array[np.logical_not(self.mass_array.mask)]  = np.random.uniform(size=self.mass_array.count())
-            self.mass_array                                   = np.ma.masked_where(death_func > prob_array, self.mass_array)
+            prob_array[mass_mask]  = np.random.uniform(size=self.mass_array.count())
+            self.mass_array        = np.ma.masked_where(death_func > prob_array, self.mass_array)
+            
+            #self.phi_sf_interp = self.schechter_SMF_func
+            #self.phi_q_interp  = ''
             
     def gen_cluster(self, cluster_mass, n_clusters, oc_flag, oc_eta):
         '''
@@ -153,7 +161,7 @@ class PENG_model:
         Ms_min      = np.ma.min(temp_mass_array)
         Ms_max      = np.ma.max(temp_mass_array)
         
-        phi_sf_at_z = lambda x: self.phi_sf_interp(np.log10(x), self.z_init)
+        phi_sf_at_z = lambda x: self.phi_sf_interp(np.log10(x),self.z_init)
         N           = A_norm * quad(phi_sf_at_z, Ms_min, Ms_max, epsrel=1e-2)[0]
         N_floor     = int(np.floor(N))
         N_rest      = N - N_floor
@@ -170,30 +178,37 @@ class PENG_model:
         
         if N == 0:
             self.cluster_masses = None
+            self.cluster_ssfr_p = None
             self.infall_Ms      = None
             self.infall_Mh      = None
             self.infall_z       = None
-        else:
-            if N_floor > 0:
-                self.cluster_masses            = np.ma.zeros(N)
-                self.cluster_masses[0:N_floor] = np.ma.copy(self.mass_array[ii])
             
+        else:
+            
+            m = len(self.ssfr_params[:,0])
+            
+            if N_floor > 0:
+                self.cluster_masses              = np.ma.zeros(N)
+                self.cluster_ssfr_p              = np.ma.zeros([m,N])
+                self.cluster_masses[0:N_floor]   = np.ma.copy(self.mass_array[ii])
+                self.cluster_ssfr_p[:,0:N_floor] = np.ma.copy(self.ssfr_params[:,ii])
+                
             if N == (N_floor+1) and N_floor >0:
                 self.cluster_masses[-1]        = np.ma.copy(self.mass_array[iii])
-            elif N == (N_floor+1):
+                self.cluster_ssfr_p[:,-1]      = np.ma.copy(self.ssfr_params[:,iii]).flatten()
+            elif N == (N_floor+1) and N_floor == 0:
                 self.cluster_masses            = np.ma.copy(self.mass_array[iii])
+                self.cluster_ssfr_p            = np.ma.copy(self.ssfr_params[:,iii]).flatten()
             
             self.infall_Ms                     = np.ma.copy(self.cluster_masses)
             self.infall_Mh                     = self.find_M_halo(self.infall_Ms,self.z_init)       ###### z_init
             
             self.infall_z                      = np.ma.zeros(N) + self.z_init
-        
+            
             self.mass_history.append(self.cluster_masses)
         
-        
-        
         if self.oc_flag and N!=0:
-            td              = np.ma.array(self.t_delay([self.cluster_masses, self.infall_Mh, self.z_init]))
+            td              = np.ma.array(self.t_delay([self.cluster_masses, self.cluster_ssfr_p, self.infall_Mh, self.z_init]))
             self.death_date = cosmo.lookback_time(self.z_init).value - td
         
     def grow_cluster(self):
@@ -203,11 +218,11 @@ class PENG_model:
         
         self.progenitor_mass = new_progenitor_mass
         
-        temp_mass_array      = np.ma.copy(self.mass_array)
+        temp_mass_array      = np.ma.copy(self.mass_array) # identify integration range
         temp_mass_array.mask = np.ma.nomask 
-        
-        Ms_min      = np.ma.min(temp_mass_array)
-        Ms_max      = np.ma.max(temp_mass_array)
+        Ms_min               = np.ma.min(temp_mass_array)
+        Ms_max               = np.ma.max(temp_mass_array)
+        temp_mass_array      = None
         
         phi_sf_at_z = lambda x: self.phi_sf_interp(np.log10(x), self.z)
         N           = A_norm * quad(phi_sf_at_z, Ms_min, Ms_max, epsrel=1e-2)[0]
@@ -229,30 +244,39 @@ class PENG_model:
             pass
         else:
             if self.cluster_masses is None:
-                if N_floor > 0:               
-                    self.cluster_masses            = np.ma.zeros(N)
-                    self.cluster_masses[0:N_floor] = np.ma.copy(self.mass_array[ii])
+                if N_floor > 0:            
+                    
+                    m = len(self.ssfr_params[:,0])
+                    
+                    self.cluster_masses              = np.ma.zeros(N)
+                    self.cluster_ssfr_p              = np.ma.zeros([m, N])
+                    self.cluster_masses[0:N_floor]   = np.ma.copy(self.mass_array[ii])
+                    self.cluster_ssfr_p[:,0:N_floor] = np.ma.copy(self.ssfr_params[:,ii])
                     
                 if N == (N_floor+1) and N_floor >0:
                     self.cluster_masses[-1]        = np.ma.copy(self.mass_array[iii])
+                    self.cluster_ssfr_p[:,-1]      = np.ma.copy(self.ssfr_params[:,iii]).flatten()
                 elif N == (N_floor+1):
                     self.cluster_masses            = np.ma.copy(self.mass_array[iii])
+                    self.cluster_ssfr_p            = np.ma.copy(self.ssfr_params[:,iii]).flatten()
                     
-                self.infall_z   = np.ma.zeros(N) + self.z
-                self.infall_Ms  = np.ma.copy(self.cluster_masses)
-                self.infall_Mh  = self.find_M_halo(self.infall_Ms, self.z)      ##### self.z
-                #self.infall_Mh  = self.p.map(self.find_M_halo, ([ms,self.z] for ms in self.infall_Ms))
+                self.infall_z                      = np.ma.zeros(N) + self.z
+                self.infall_Ms                     = np.ma.copy(self.cluster_masses)
+                self.infall_Mh                     = self.find_M_halo(self.infall_Ms, self.z)      ##### self.z
+                #self.infall_Mh                    = self.p.map(self.find_M_halo, ([ms,self.z] for ms in self.infall_Ms))
                 
                 if self.oc_flag and N!=0:
-                    td              = np.ma.array(self.t_delay([self.cluster_masses, self.infall_Mh, self.z]))
+                    td              = np.ma.array(self.t_delay([self.cluster_masses, self.cluster_ssfr_p, self.infall_Mh, self.z]))
                     self.death_date = cosmo.lookback_time(self.z).value - td
                 
                 self.mass_history.append(self.cluster_masses)
                 
             else:
                 n                             = len(self.cluster_masses)
+                m                             = len(self.ssfr_params[:,0])
                 
                 new_arr_mass                  = np.ma.zeros(n + N)
+                new_arr_ssfr_p                = np.ma.zeros([m, n + N])
                 new_arr_z                     = np.ma.zeros(n + N)
                 new_arr_Ms                    = np.ma.zeros(n + N)
                 new_arr_Mh                    = np.ma.zeros(n + N)
@@ -260,29 +284,33 @@ class PENG_model:
                 new_arr_flag_MQ               = np.ma.zeros(n + N)
                 
                 new_arr_mass[0:n]             = self.cluster_masses[:]
+                new_arr_ssfr_p[:,0:n]         = self.cluster_ssfr_p[:,:]
                 new_arr_z[0:n]                = self.infall_z[:]
                 new_arr_Ms[0:n]               = self.infall_Ms[:]
                 new_arr_Mh[0:n]               = self.infall_Mh[:]
                 new_arr_flag_MQ[0:n]          = self.MQ_flags[:]
                 
                 if N_floor > 0:               
-                    new_arr_mass[n:n+N_floor] = np.ma.copy(self.mass_array[ii])
+                    new_arr_mass[n:n+N_floor]     = np.ma.copy(self.mass_array[ii])
+                    new_arr_ssfr_p[:,n:n+N_floor] = np.ma.reshape(self.ssfr_params[:,ii], (m,-1))#, copy=True)
                     
                 if N == (N_floor+1):
-                    new_arr_mass[-1]          = np.ma.copy(self.mass_array[iii])
+                    new_arr_mass[-1]            = np.ma.copy(self.mass_array[iii])
+                    new_arr_ssfr_p[:,-1]        = np.ma.copy(self.ssfr_params[:,iii]).flatten()
                 
                 if self.oc_flag:
-                    new_arr_flag_OC               = np.ma.zeros(n + N)
-                    new_arr_flag_OC[0:n]          = self.OC_flags[:]
-                    self.OC_flags = new_arr_flag_OC
+                    new_arr_flag_OC             = np.ma.zeros(n + N)
+                    new_arr_flag_OC[0:n]        = self.OC_flags[:]
+                    self.OC_flags               = new_arr_flag_OC
                     
                 
-                new_arr_z[n:n+N]              = np.ma.zeros(N) + self.z
-                new_arr_Ms[n:n+N]             = np.ma.copy(new_arr_mass[n:n+N])
-                new_arr_Mh[n:n+N]             = self.find_M_halo(new_arr_mass[n:n+N], self.z) ###self.z 
-                #new_arr_Mh[n:n+N]             = p.map(self.find_M_halo, ([ms,self.z] for ms in new_arr_mass[n:n+N]))
+                new_arr_z[n:n+N]                = np.ma.zeros(N) + self.z
+                new_arr_Ms[n:n+N]               = np.ma.copy(new_arr_mass[n:n+N])
+                new_arr_Mh[n:n+N]               = self.find_M_halo(new_arr_mass[n:n+N], self.z) ###self.z 
+                #new_arr_Mh[n:n+N]              = p.map(self.find_M_halo, ([ms,self.z] for ms in new_arr_mass[n:n+N]))
                                
                 self.cluster_masses = new_arr_mass
+                self.cluster_ssfr_p = new_arr_ssfr_p
                 self.infall_z       = new_arr_z
                 self.infall_Ms      = new_arr_Ms
                 self.infall_Mh      = new_arr_Mh
@@ -291,36 +319,39 @@ class PENG_model:
     
                 self.mass_history.append(self.cluster_masses)
     
-    def evolve_cluster(self):
+    def evolve_cluster(self, p):
         if self.z <= 3:
             k_minus = 0.027/4/np.sqrt(1+self.z)/1e9     #merging is turned-off at z>3, PENG+2010
         else:
             k_minus = 0
         
-        mass_array = np.ma.copy(self.cluster_masses)
+        mass_array  = np.ma.copy(self.cluster_masses)
+        ssfr_params = np.ma.copy(self.cluster_ssfr_p)
         
-        if self.cluster_masses is None or len(mass_array[np.logical_not(mass_array.mask)]) == 0:
+        mass_mask = np.logical_not(mass_array.mask)
+        
+        if self.cluster_masses is None or len(mass_array[mass_mask]) == 0:
             pass
         else:
+            inits                 = (mass_array[mass_mask], ssfr_params[:,mass_mask])
+            mass_array[mass_mask] = self.integ.RK45(p, inits, self.t, force=True, mpp=False, analytic=False)
             
-            mass_array[np.logical_not(mass_array.mask)] = self.integ.RK45(mass_array[np.logical_not(mass_array.mask)], self.t, force=True)
-            
-            death_func    = np.minimum( self.eta_m(np.ma.log10(mass_array), self.z) * self.integ.step *1e9, np.ones(mass_array.shape))
+            death_func    = np.minimum( self.eta_m(np.ma.log10(mass_array), self.z, ssfr_params) * self.integ.step *1e9, np.ones(mass_array.shape))
             prob_array    = np.ones(mass_array.shape)
-            prob_array[np.logical_not(mass_array.mask)]  = np.random.uniform(size=mass_array.count())
+            prob_array[mass_mask]  = np.random.uniform(size=mass_array.count())
             mass_array    = np.ma.masked_where(death_func > prob_array, mass_array)               
             
             self.MQ_flags = [death_func > prob_array][0]
             
             if self.oc_flag:
-                self.update_death_date(mass_array)
+                self.update_death_date(mass_array, ssfr_params)
                 mass_array    = np.ma.masked_where(self.death_date > self.t, mass_array)
                 self.OC_flags = [self.death_date > self.t][0]
                 print(len(self.death_date[self.death_date > self.t]), len(self.death_date))
         
             self.cluster_masses = mass_array
     
-    def update_death_date(self, mass_array):
+    def update_death_date(self, mass_array, ssfr_params):
         tt = time()
         
         N = mass_array.shape[0]
@@ -335,7 +366,7 @@ class PENG_model:
             death_date[0:n] = self.death_date[:]
             
             infall_times    = cosmo.lookback_time(self.infall_z[n:N]).value
-            delay_times     = self.t_delay([mass_array[n:N], self.infall_Mh[n:N], self.infall_z[n:N]])
+            delay_times     = self.t_delay([mass_array[n:N], ssfr_params[:,n:N], self.infall_Mh[n:N], self.infall_z[n:N]])
             #delay_times     = pool.map( self.t_delay, ([ms,mh,z] for (ms,mh,z) in zip(mass_array[n:N], self.infall_Mh[n:N], self.infall_z[n:N])))
             death_date[n:N] = infall_times - delay_times
         
@@ -349,7 +380,7 @@ class PENG_model:
             #print(mass_array[not_masked], len(mass_array[not_masked]))
             
             infall_times = cosmo.lookback_time(self.infall_z[not_masked]).value
-            delay_times  = self.t_delay([mass_array[not_masked], self.infall_Mh[not_masked], self.infall_z[not_masked]])
+            delay_times  = self.t_delay([mass_array[not_masked], ssfr_params[:,not_masked], self.infall_Mh[not_masked], self.infall_z[not_masked]])
             
             #delay_times = pool.map( self.t_delay, ([ms,mh,z] for (ms,mh,z) in zip(mass_array[not_masked], self.infall_Mh[not_masked], self.infall_z[not_masked])))
             
@@ -382,17 +413,18 @@ class PENG_model:
         self.final_mass_cluster_Q  = np.log10(temp[mask])
         self.infall_z_Q            = self.infall_z[mask]
     
-    def DE(self, mass, t):
+    def DE(self, item, t):
+        mass, ssfr_params = item[0], item[1]
         z = z_at_value(cosmo.age,(cosmo.age(0).value - t)*u.Gyr, zmin=-1e-6) 
-        return mass*(self.sSFR(np.log10(mass), z)) *1e9
+        return mass*(self.sSFR(np.log10(mass), z, ssfr_params)) *1e9
     
-    def eta_m(self, logMs, z):      # mass-dependent death function from PENG+2010
+    def eta_m(self, logMs, z, ssfr_params):      # mass-dependent death function from PENG+2010
         M_ref = np.power(10,10.6)
-        return self.sSFR(logMs,z) * np.power(10, logMs) / M_ref
+        return self.sSFR(logMs,z, ssfr_params) * np.power(10, logMs) / M_ref
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     
     ### PENG Analytic Model ###
-    def gen_field_analytic(self):
+    def gen_field_analytic(self,p):
         self.logMStar_setup = np.arange(self.logM_min, 12, 0.01)
         
         phi_init_sf = self.schechter_SMF_func(self.logMStar_setup)
@@ -414,7 +446,7 @@ class PENG_model:
         
         while t >= t_final and condition:
             inits                   = np.array([phi_init_sf,phi_init_q], copy=True)
-            output                  = integ_an.RK45(inits, t, force)
+            output                  = integ_an.RK45(p, inits, t, force, mpp=False, analytic=True)
             phi_init_sf, phi_init_q = output[0,:], output[1,:]
                         
             phi_sf.append(np.copy(phi_init_sf))
@@ -468,15 +500,22 @@ class PENG_model:
         
         return ssfr ## per year
 
-    def sSFR_schreiber(self, logMs, z):       # Schreiber+2015
+    def sSFR_schreiber(self, logMs, z, ssfr_params):       # Schreiber+2015
         Ms  = np.power(10,logMs)
         r   = np.log10(1+z)
         m   = logMs - 9
-        m_0 = self.ssfr_params[0,:]
-        m_1 = self.ssfr_params[1,:]
-        a_0 = self.ssfr_params[2,:]
-        a_1 = self.ssfr_params[3,:]
-        a_2 = self.ssfr_params[4,:]
+        try:
+            m_0 = ssfr_params[0,:]
+            m_1 = ssfr_params[1,:]
+            a_0 = ssfr_params[2,:]
+            a_1 = ssfr_params[3,:]
+            a_2 = ssfr_params[4,:]
+        except:
+            m_0 = ssfr_params[0]
+            m_1 = ssfr_params[1]
+            a_0 = ssfr_params[2]
+            a_1 = ssfr_params[3]
+            a_2 = ssfr_params[4]
                 
         lsfr = m - m_0 + a_0 * r - a_1 * np.maximum(np.zeros(m.shape), m-m_1-a_2 * r)**2
         ssfr = 10**(lsfr) / Ms 
@@ -487,13 +526,16 @@ class PENG_model:
         Ms  = np.power(10,logMs)
         r   = np.log10(1+z)
         m   = logMs - 9
-        m_0 = 0.50
-        m_1 = 0.36
-        a_0 = 1.50
-        a_1 = 0.30
-        a_2 = 2.50
+        
+        n   = logMs.shape
+        
+        m_0 = np.zeros(n) + 0.50
+        m_1 = np.zeros(n) + 0.36
+        a_0 = np.zeros(n) + 1.50
+        a_1 = np.zeros(n) + 0.30
+        a_2 = np.zeros(n) + 2.50
                 
-        lsfr = m - m_0 + a_0 * r - a_1 * np.maximum(np.zeros(m.shape), m-m_1-a_2 * r)**2
+        lsfr = m - m_0 + a_0 * r - a_1 * np.maximum(np.zeros(n), m-m_1-a_2 * r)**2
         ssfr = 10**(lsfr) / Ms 
         
         return ssfr ## per year
@@ -505,17 +547,39 @@ class PENG_model:
         a_1 = np.random.normal(loc=0.30, scale=0.08, size=n)
         a_2 = np.random.normal(loc=2.50, scale=0.60, size=n)
         
-        self.ssfr_params = np.array([m_0, m_1, a_0, a_1, a_2])
+        return np.array([m_0, m_1, a_0, a_1, a_2])
         
-    def sSFR_speagle(self, logMs, z):
+    def sSFR_speagle(self, logMs, z, ssfr_params):
         z_temp     = np.minimum(z,6)
         logMs_temp = np.maximum(logMs, 8.5) 
         
         t   = cosmo.lookback_time(9999).value - cosmo.lookback_time(z_temp).value  ##  WARNING:: TRY cosmo.age(z).value instead!!
-        x_1 = self.ssfr_params[0,:]
-        x_2 = self.ssfr_params[1,:]
-        x_3 = self.ssfr_params[2,:]
-        x_4 = self.ssfr_params[3,:]
+        
+        try:
+            x_1 = ssfr_params[0,:]
+            x_2 = ssfr_params[1,:]
+            x_3 = ssfr_params[2,:]
+            x_4 = ssfr_params[3,:]
+        except:
+            x_1 = ssfr_params[0]
+            x_2 = ssfr_params[1]
+            x_3 = ssfr_params[2]
+            x_4 = ssfr_params[3]
+        
+        logSFR = (x_1 - x_2*t) * logMs_temp - (x_3 - x_4*t)
+        ssfr   = np.power(10, logSFR) / np.power(10,logMs_temp)
+        
+        return  ssfr ## peryear
+    
+    def sSFR_speagle_old(self, logMs, z):
+        z_temp     = np.minimum(z,6)
+        logMs_temp = np.maximum(logMs, 8.5) 
+        
+        t   = cosmo.lookback_time(9999).value - cosmo.lookback_time(z_temp).value  ##  WARNING:: TRY cosmo.age(z).value instead!!
+        x_1 = 0.840
+        x_2 = 0.026
+        x_3 = 6.510
+        x_4 = 0.110
         
         logSFR = (x_1 - x_2*t) * logMs_temp - (x_3 - x_4*t)
         ssfr   = np.power(10, logSFR) / np.power(10,logMs_temp)
@@ -528,7 +592,7 @@ class PENG_model:
         x_3 = np.random.normal(loc=6.510, scale=0.240, size=n)
         x_4 = np.random.normal(loc=0.110, scale=0.030, size=n)
 
-        self.ssfr_params = np.array([x_1, x_2, x_3, x_4])
+        return np.array([x_1, x_2, x_3, x_4])
         
     def update_ssfr_params(self):
         
@@ -540,7 +604,7 @@ class PENG_model:
     
     ### Overconsumption Delay times ###
     def t_delay(self, item):
-        M_star, M_halo, z = item[0],item[1],item[2]
+        M_star, ssfr_p, M_halo, z = item[0],item[1],item[2],item[3]
         
         #delay time params
         f_bar   = 0.17
@@ -551,10 +615,10 @@ class PENG_model:
         
         f_star    = M_star/M_halo
         #f_cold    = 0.1*(1+np.minimum(z,2))**2 * f_star
-        f_cold    = self.M_cold(logMs, z)/M_halo
+        f_cold    = self.M_cold(logMs, z, ssfr_p)/M_halo
         
         num       = f_bar - f_cold - f_star * (1 + self.oc_eta*(1+R)) - f_strip
-        den       = f_star * (1 - R + self.oc_eta) * self.sSFR(logMs, z)
+        den       = f_star * (1 - R + self.oc_eta) * self.sSFR(logMs, z, ssfr_p)
         return (num/den)/(1e9) #gyr
         
     def t_delay_2(self, M_halo, z):
@@ -577,7 +641,7 @@ class PENG_model:
         
     
     
-    def M_cold(self,logMs, z):          #cold gas mass fraction 
+    def M_cold(self,logMs, z, ssfr_params):          #cold gas mass fraction 
         A_mu = 0.07 #pm 0.15
         B_mu = -3.8 #pm 0.4
         F_mu = 0.63 #pm 0.1
@@ -587,7 +651,7 @@ class PENG_model:
         beta = 2.
         
         sSFR_fcold = self.sSFR_fcold(logMs, z)
-        sSFR       = self.sSFR(logMs, z)*1e9
+        sSFR       = self.sSFR(logMs, z, ssfr_params)*1e9
         
         M_cold_Ms = A_mu + B_mu*(np.log10(1+z) - F_mu)**beta + C_mu*np.log10(sSFR / sSFR_fcold) + \
                     D_mu*(logMs - 10.7)

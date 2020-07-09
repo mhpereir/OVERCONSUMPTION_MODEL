@@ -8,8 +8,8 @@ from model import PENG_model
 from plot_utils import plot_results
 from multiprocessing import Pool
 
-z_init_field   = 6
-z_init_cluster = 6
+z_init_field   = 10
+z_init_cluster = 10
 z_final = 1
 
 cluster_mass = 13.5  #log10(Mhalo)
@@ -21,11 +21,12 @@ oc_eta       = 0     # mass-loading factor
 plot_flag    = True
 savefigs     = True
 
-
+n_cores      = 12
+n_spare      = 8
 
 if __name__ == "__main__":
     
-    p = Pool(4)
+    p = Pool(n_cores - n_spare)
     
     with open("params.json") as paramfile:
         params = json.load(paramfile)
@@ -35,7 +36,7 @@ if __name__ == "__main__":
     model_c   = PENG_model(params, z_init_cluster, z_final)  # initializes the model class
 
     model_c.gen_galaxies(n_galax)                            # generates the SF population at z_init
-    model_c.gen_field_analytic()                             # generates the PENG model predictions for the field, analytically
+    model_c.gen_field_analytic(p)                            # generates the PENG model predictions for the field, analytically
                                                              #      used in plotting & determining cluster galaxy growth
     
     print('\t Done analytical model')
@@ -49,8 +50,8 @@ if __name__ == "__main__":
         Generates the cluster SMFs'
         '''
         start_time_2 = time()
-        model_c.evolve_field()
-        model_c.evolve_cluster() # applies quenching conditions and the mass increase of the galaxies
+        model_c.evolve_field(p)
+        model_c.evolve_cluster(p) # applies quenching conditions and the mass increase of the galaxies
         
         model_c.grow_cluster()
         
@@ -69,7 +70,7 @@ if __name__ == "__main__":
     else:
         model_f.gen_galaxies(n_galax)
         #model_f.sf_masses = np.copy(model_c.sf_masses)  #save ourselves some time and re-use the initial SF population
-        model_f.gen_field_analytic()
+        model_f.gen_field_analytic(p)
         
         model_f.setup_evolve()
         

@@ -131,18 +131,18 @@ class plot_results:
         xx   = []
         xx_2 = []
         yy   = []
-        zz   = []
+        #zz   = []
         
         for z in z_range:
             xx.append(np.zeros(len(Mh_range)) + z)
             xx_2.append(np.zeros(len(Mh_range)) + cosmo.lookback_time(z).value)
             yy.append(np.log10(model.M_star(Mh_range, z)))
-            zz.append(cosmo.lookback_time(z).value - model.t_delay_2(Mh_range, z))
+            #zz.append(cosmo.lookback_time(z).value - model.t_delay_2(Mh_range, z))
         
         xx   = np.array(xx).flatten()
         xx_2 = np.array(xx_2).flatten()
         yy   = np.array(yy).flatten()
-        zz   = np.array(zz).flatten()
+        #zz   = np.array(zz).flatten()
         
         fig,ax = plt.subplots(tight_layout=True)
         #contourf_ = ax.tricontourf(xx,yy,zz, np.arange(0,13,0.1), extend='both')
