@@ -34,7 +34,7 @@ class integration_utils():
                     n   = len(mass)
                     dn  = int(np.floor(n/self.n_cores))
                                     
-                    list_of_arr = [[ mass[dn*i:dn*(i+1)], ssfr[:, int(dn*i):dn*(i+1)] ] for i in range(self.n_cores)]
+                    list_of_arr = [[ mass[dn*j:dn*(j+1)], ssfr[:, int(dn*j):dn*(j+1)] ] for j in range(self.n_cores)]
                     
                     if dn*self.n_cores < n:
                         list_of_arr.append(  [mass[dn*self.n_cores:], ssfr[:, dn*self.n_cores:]]  )
@@ -46,9 +46,9 @@ class integration_utils():
                 y1 = out[0,0]
                 z1 = out[0,1]
                 
-                for i in range(n_runs):
-                    y1 = np.ma.concatenate((y1, out[i+1,0]), axis=0)
-                    z1 = np.ma.concatenate((z1, out[i+1,1]), axis=0)
+                for j in range(n_runs):
+                    y1 = np.ma.concatenate((y1, out[j+1,0]), axis=0)
+                    z1 = np.ma.concatenate((z1, out[j+1,1]), axis=0)
                     
             else:
                 if analytic:

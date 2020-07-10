@@ -10,7 +10,7 @@ from multiprocessing import Pool
 
 z_init_field   = 10
 z_init_cluster = 10
-z_final = 1
+z_final = 0
 
 cluster_mass = 13.5  #log10(Mhalo)
 n_clusters   = 10000
@@ -21,8 +21,8 @@ oc_eta       = 0     # mass-loading factor
 plot_flag    = True
 savefigs     = True
 
-n_cores      = 12
-n_spare      = 8
+n_cores      = 4
+n_spare      = 0
 
 if __name__ == "__main__":
     
