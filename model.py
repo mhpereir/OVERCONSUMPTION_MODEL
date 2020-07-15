@@ -21,6 +21,9 @@ class PENG_model:
         self.logM_std  = params['model_setup']['logM_std']    # std of MCMC - Metropolis-hastings sampler
         self.f_s_limit = params['model_setup']['f_s_limit']   # lower limit in the stellar mass fraction of galaxy halo
         
+        self.x_bins    = np.arange(self.logM_min, 12.01, 0.1)
+        self.x_midp    = (self.x_bins[1:] + self.x_bins[:-1])/2
+        
         self.sSFR_key       = params['model_setup']['sSFR']
         
         #Cosmology params
@@ -110,6 +113,10 @@ class PENG_model:
         
         self.ssfr_params = self.gen_ssfr_params(len(self.sf_masses))
     
+        self.phi_sf_interp = self.schechter_SMF_func
+    def phi_q_interp(self,logMs):
+        return np.zeros(logMs.shape)
+    
     def evolve_field(self, p):        
         if self.z <= 3:
             k_minus = 0.027/4/np.sqrt(1+self.z)/1e9     #merging is turned-off at z>3, PENG+2010
@@ -135,8 +142,13 @@ class PENG_model:
             prob_array[mass_mask]  = np.random.uniform(size=self.mass_array.count())
             self.mass_array        = np.ma.masked_where(death_func > prob_array, self.mass_array)
             
-            #self.phi_sf_interp = self.schechter_SMF_func
-            #self.phi_q_interp  = ''
+            self.parse_masked_mass_field()
+            
+            hist_sf,_          = np.histogram( self.final_mass_field_SF, bins=self.x_bins)
+            hist_q ,_          = np.histogram( self.final_mass_field_Q , bins=self.x_bins)
+            
+            self.phi_sf_interp = interp1d(self.x_midp, hist_sf, fill_value="extrapolate")
+            self.phi_q_interp  = interp1d(self.x_midp, hist_q , fill_value="extrapolate")
             
     def gen_cluster(self, cluster_mass, n_clusters, oc_flag, oc_eta):
         '''
@@ -161,7 +173,7 @@ class PENG_model:
         Ms_min      = np.ma.min(temp_mass_array)
         Ms_max      = np.ma.max(temp_mass_array)
         
-        phi_sf_at_z = lambda x: self.phi_sf_interp(np.log10(x),self.z_init)
+        phi_sf_at_z = lambda x: self.phi_sf_interp(np.log10(x))
         N           = A_norm * quad(phi_sf_at_z, Ms_min, Ms_max, epsrel=1e-2)[0]
         N_floor     = int(np.floor(N))
         N_rest      = N - N_floor
@@ -224,7 +236,7 @@ class PENG_model:
         Ms_max               = np.ma.max(temp_mass_array)
         temp_mass_array      = None
         
-        phi_sf_at_z = lambda x: self.phi_sf_interp(np.log10(x), self.z)
+        phi_sf_at_z = lambda x: self.phi_sf_interp(np.log10(x))
         N           = A_norm * quad(phi_sf_at_z, Ms_min, Ms_max, epsrel=1e-2)[0]
         N_floor     = int(np.floor(N))
         N_rest      = N - N_floor
@@ -467,8 +479,8 @@ class PENG_model:
             
             z_range.append(z)
         
-        self.phi_sf_interp = interp2d(self.logMStar_setup, z_range, phi_sf)
-        self.phi_q_interp  = interp2d(self.logMStar_setup, z_range, phi_q)
+        self.phi_sf_interp_an = interp2d(self.logMStar_setup, z_range, phi_sf)
+        self.phi_q_interp_an  = interp2d(self.logMStar_setup, z_range, phi_q)
     
     def DE_2(self, inits, t):
         phi_sf, phi_q = inits[0,:], inits[1,:]
@@ -542,7 +554,7 @@ class PENG_model:
     
     def gen_ssfr_schreiber_params(self, n):
         m_0 = np.random.normal(loc=0.50, scale=0.07, size=n)
-        m_1 = np.random.normal(loc=0.36, scale=0.36, size=n)
+        m_1 = np.random.normal(loc=0.36, scale=0.30, size=n)
         a_0 = np.random.normal(loc=1.50, scale=0.15, size=n)
         a_1 = np.random.normal(loc=0.30, scale=0.08, size=n)
         a_2 = np.random.normal(loc=2.50, scale=0.60, size=n)
@@ -769,7 +781,7 @@ class PENG_model:
         
         Mstar_from_halo = self.M_star(np.power(10, logMhalo_range),z=z) ## Msol (NOT log!)
         logMs           = np.log10(Mstar_from_halo)
-        phi_a_interp    = self.phi_sf_interp(logMs,z) + self.phi_q_interp(logMs,z)
+        phi_a_interp    = self.phi_sf_interp(logMs) + self.phi_q_interp(logMs)
         x               = np.power(10, logMhalo_range)
         y               = phi_a_interp*np.power(10,logMhalo_range)*self.dMs_dMh(np.power(10,logMhalo_range),z)
         

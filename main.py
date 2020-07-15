@@ -10,7 +10,7 @@ from multiprocessing import Pool
 
 z_init_field   = 10
 z_init_cluster = 10
-z_final = 0
+z_final = 1
 
 cluster_mass = 13.5  #log10(Mhalo)
 n_clusters   = 10000
@@ -34,7 +34,7 @@ if __name__ == "__main__":
     n_galax   = params['model_setup']['n_galaxies']
     
     model_c   = PENG_model(params, z_init_cluster, z_final)  # initializes the model class
-
+    
     model_c.gen_galaxies(n_galax)                            # generates the SF population at z_init
     model_c.gen_field_analytic(p)                            # generates the PENG model predictions for the field, analytically
                                                              #      used in plotting & determining cluster galaxy growth

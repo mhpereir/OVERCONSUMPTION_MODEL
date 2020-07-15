@@ -64,8 +64,8 @@ class plot_results:
         ax.scatter(x_midp, y_q, c='r', marker='x')
         ax.semilogy(x_midp, y_q, color='r', alpha=0.5)
         
-        ax.semilogy(x_range, model_f.phi_sf_interp(x_range,z_final) * y_sf[abs(x_midp[:] - 10) < 0.1]/model_f.phi_sf_interp(10,z_final) )
-        ax.semilogy(x_range, model_f.phi_q_interp(x_range,z_final)  * y_sf[abs(x_midp[:] - 10) < 0.1]/model_f.phi_sf_interp(10,z_final) )
+        ax.semilogy(x_range, model_f.phi_sf_interp_an(x_range,z_final) * y_sf[abs(x_midp[:] - 10) < 0.1]/model_f.phi_sf_interp_an(10,z_final) )
+        ax.semilogy(x_range, model_f.phi_q_interp_an(x_range,z_final)  * y_sf[abs(x_midp[:] - 10) < 0.1]/model_f.phi_sf_interp_an(10,z_final) )
         ax.set_xlabel('Stellar Mass [log($M_*/M_\odot$)]')
         ax.set_ylabel('$\Phi_{Field}$')
         ax.set_xlim([8.5,12])
@@ -82,8 +82,8 @@ class plot_results:
         ax.scatter(x_midp, y_q, c='r', marker='x')
         ax.semilogy(x_midp, y_q, color='r', alpha=0.5)
         
-        ax.semilogy(x_range, model_c.phi_sf_interp(x_range,z_final) * y_sf[abs(x_midp[:] - 10) < 0.1]/model_c.phi_sf_interp(10,z_final) )
-        ax.semilogy(x_range, model_c.phi_q_interp(x_range,z_final)  * y_sf[abs(x_midp[:] - 10) < 0.1]/model_c.phi_sf_interp(10,z_final) )
+        ax.semilogy(x_range, model_c.phi_sf_interp_an(x_range,z_final) * y_sf[abs(x_midp[:] - 10) < 0.1]/model_c.phi_sf_interp_an(10,z_final) )
+        ax.semilogy(x_range, model_c.phi_q_interp_an(x_range,z_final)  * y_sf[abs(x_midp[:] - 10) < 0.1]/model_c.phi_sf_interp_an(10,z_final) )
         ax.set_xlabel('Stellar Mass [log($M_*/M_\odot$)]')
         ax.set_ylabel('$\Phi_{Cluster}$')
         ax.set_xlim([8.5,12])
