@@ -42,7 +42,7 @@ class PENG_model:
         if self.sSFR_key == 'Peng' or self.sSFR_key == 'PENG':
             self.sSFR            = self.sSFR_peng
             self.sSFR_an         = self.sSFR_peng
-            self.gen_ssfr_params = None
+            self.gen_ssfr_params = self.gen_ssfr_peng_params
         
         elif self.sSFR_key == 'Schreiber' or self.sSFR_key == 'SCHREIBER':
             self.sSFR            = self.sSFR_schreiber
@@ -128,7 +128,7 @@ class PENG_model:
             pass
         else:
             inits                       = (self.mass_array[mass_mask], self.ssfr_params[:,mass_mask])
-            self.mass_array[mass_mask]  = self.integ.RK45(p, inits, self.t, self.force, mpp=True, analytic=False)
+            self.mass_array[mass_mask]  = self.integ.RK45(p, inits, self.t, self.force, mpp=False, analytic=False)
             
             if (self.t - self.integ.step) > self.t_final:
                 pass
@@ -501,7 +501,7 @@ class PENG_model:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     
     ### sSFR functions ###
-    def sSFR_peng(self,logMs,z):          #PENG sSFR
+    def sSFR_peng(self, logMs, z, *ssfr_params):          #PENG sSFR
         z_temp = np.minimum(z,2)
         #z_temp = z
         t    = cosmo.lookback_time(9999).value - cosmo.lookback_time(z_temp).value  ##
@@ -511,6 +511,9 @@ class PENG_model:
         ssfr = 2.5e-9 * (Ms/(10e10))**(beta) * (t/3.5)**(-2.2)
         
         return ssfr ## per year
+    
+    def gen_ssfr_peng_params(self, n):
+        return np.zeros([1,n])
 
     def sSFR_schreiber(self, logMs, z, ssfr_params):       # Schreiber+2015
         Ms  = np.power(10,logMs)
@@ -607,10 +610,25 @@ class PENG_model:
         return np.array([x_1, x_2, x_3, x_4])
         
     def update_ssfr_params(self):
+        try:
+            delta_t    = self.t_old - self.t
+        except:
+            self.t_old = cosmo.lookback_time(self.z_init).value
+            delta_t    = self.t_old - self.t
         
-        ### if enough time has passed, switch up the params
+        print(delta_t)
         
-        pass
+        if delta_t >= 0.2: #Gyr
+            n                  = len(self.sf_masses)
+            self.ssfr_params   = self.gen_ssfr_params(n)
+            
+            m                   = len(self.cluster_masses)
+            self.cluster_ssfr_p = self.gen_ssfr_params(m)
+            
+            self.t_old          = self.t
+            print('*new ssfr params*')
+        else:
+            pass
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     

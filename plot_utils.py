@@ -146,9 +146,10 @@ class plot_results:
         
         fig,ax = plt.subplots(tight_layout=True)
         #contourf_ = ax.tricontourf(xx,yy,zz, np.arange(0,13,0.1), extend='both')
-        
+    
         ax.scatter(model.infall_z_Q, model.final_mass_cluster_Q, s=0.1, c='r')
         ax.scatter(model.infall_z_SF, model.final_mass_cluster_SF, s=0.1, c='b')
+        
         ax.set_xlabel('Redshift [z]')
         ax.set_ylabel('Stellar Mass [log($M_*$/$M_\odot$)]')
         #ax.set_ylim([8,12])
@@ -160,9 +161,16 @@ class plot_results:
         
         fig,ax = plt.subplots(tight_layout=True)
         #contourf_ = ax.tricontourf(xx_2,yy,zz, np.arange(0,13,0.1), extend='both')
+        try:
+            ax.scatter(cosmo.lookback_time(model.infall_z_Q).value, model.final_mass_cluster_Q, s=0.1, c='r')
+        except:
+            pass
         
-        ax.scatter(cosmo.lookback_time(model.infall_z_Q).value, model.final_mass_cluster_Q, s=0.1, c='r')
-        ax.scatter(cosmo.lookback_time(model.infall_z_SF).value, model.final_mass_cluster_SF, s=0.1, c='b')
+        try:
+            ax.scatter(cosmo.lookback_time(model.infall_z_SF).value, model.final_mass_cluster_SF, s=0.1, c='b')
+        except:
+            pass
+        
         ax.set_xlabel('Lookback Time [Gyr]')
         ax.set_ylabel('Stellar Mass [log($M_*$/$M_\odot$)]')
         #ax.set_ylim([8,12])

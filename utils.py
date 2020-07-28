@@ -41,7 +41,7 @@ class integration_utils():
                         n_runs += 1
                 
                 start__ = time()
-                out = np.ma.array(p.map(self.list_operation, ((arr,f,r) for arr in list_of_arr)))
+                out = np.ma.array(p.map(self.list_operation, ((arr,f,r) for arr in list_of_arr)))                
                 print('\t \t Time for mpp: {}'.format(time() - start__))
                 y1 = out[0,0]
                 z1 = out[0,1]

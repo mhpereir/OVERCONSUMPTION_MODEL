@@ -31,6 +31,7 @@ def main(number_of_task, arr,p):
     
     return time() - _start
     p.close()
+    p.join()
 
 if __name__ == '__main__':
     p        = Pool(4)

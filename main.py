@@ -13,7 +13,7 @@ z_init_cluster = 10
 z_final = 1
 
 cluster_mass = 13.5  #log10(Mhalo)
-n_clusters   = 10000
+n_clusters   = 100000
 
 oc_flag      = True  # flag for overconsumption model. 
 oc_eta       = 0     # mass-loading factor
@@ -26,7 +26,7 @@ n_spare      = 0
 
 if __name__ == "__main__":
     
-    p = Pool(n_cores - n_spare)
+    p = Pool(n_cores - n_spare, maxtasksperchild=1)
     
     with open("params.json") as paramfile:
         params = json.load(paramfile)
@@ -54,6 +54,8 @@ if __name__ == "__main__":
         model_c.evolve_cluster(p) # applies quenching conditions and the mass increase of the galaxies
         
         model_c.grow_cluster()
+        model_c.update_ssfr_params()
+        
         
         model_c.update_step() # advances t, z to next step
         
@@ -82,6 +84,9 @@ if __name__ == "__main__":
             start_time_2 = time()
             model_f.evolve_field()
             
+            model_f.update_ssfr_params()
+            
+            
             model_f.update_step() # advances t, z to next step
             
             #print('\t time per step: {:.2f}s'.format(time() - start_time_2))
@@ -99,4 +104,5 @@ if __name__ == "__main__":
     print('Total stellar mass of cluster: ', np.log10(total_stel_mass_per_cluster))
     
     p.close()
+    p.join()
     
