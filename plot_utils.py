@@ -16,9 +16,9 @@ class plot_results:
             
             self.QFs_QE(model_c, model_f)
             
-            self.delay_times(model_c)
+            #self.delay_times(model_c)
             
-            self.history_tracks(model_c)
+            #self.history_tracks(model_c)
             
             if self.savefigs:
                 pass
@@ -30,10 +30,12 @@ class plot_results:
         Initial star forming field
         '''
         x_range_init = np.arange(model.logM_min,model.logM_max+0.05,0.1)
-            
+        
+        init_phi_hm  = model.open_HMF_file()
+        
         fig,ax = plt.subplots(tight_layout=True)
-        y_init, x_init,_ = ax.hist(model.sf_masses, log=True, bins=x_range_init)
-        ax.semilogy(x_range_init, model.schechter_SMF_func(x_range_init)*y_init[abs(x_init[:-1] - 4) < 0.001]/model.schechter_SMF_func(4) )
+        y_init, x_init,_ = ax.hist(model.hmass_init, log=True, bins=x_range_init)
+        ax.semilogy(x_range_init, init_phi_hm(x_range_init)*y_init[abs(x_init[:-1] - 9) < 0.001]/init_phi_hm(9) )
         ax.set_xlabel('Stellar Mass [log($M_*/M_\odot$)]')
         ax.set_ylabel('$\Phi_{Field}$')
         if self.savefigs:
@@ -55,8 +57,8 @@ class plot_results:
         x_range = np.arange(8,12,0.1)
         
         fig,ax = plt.subplots(tight_layout=True)
-        y_sf,x_sf = np.histogram(model_f.final_mass_field_SF, bins=np.arange(6,14,0.2))
-        y_q,x_q   = np.histogram(model_f.final_mass_field_Q, bins=np.arange(6,14,0.2))
+        y_sf,x_sf = np.histogram(model_f.final_mass_field_SF, bins=np.arange(6,14,0.1))
+        y_q,x_q   = np.histogram(model_f.final_mass_field_Q, bins=np.arange(6,14,0.1))
         x_midp    = (x_sf[1:] + x_sf[:-1])/2
         
         ax.scatter(x_midp, y_sf, c='b', marker='x')
@@ -64,8 +66,8 @@ class plot_results:
         ax.scatter(x_midp, y_q, c='r', marker='x')
         ax.semilogy(x_midp, y_q, color='r', alpha=0.5)
         
-        ax.semilogy(x_range, model_f.phi_sf_interp_an(x_range,z_final) * y_sf[abs(x_midp[:] - 10) < 0.1]/model_f.phi_sf_interp_an(10,z_final) )
-        ax.semilogy(x_range, model_f.phi_q_interp_an(x_range,z_final)  * y_sf[abs(x_midp[:] - 10) < 0.1]/model_f.phi_sf_interp_an(10,z_final) )
+        #ax.semilogy(x_range, model_f.phi_sf_interp_an(x_range,z_final) * y_sf[abs(x_midp[:] - 10) < 0.1]/model_f.phi_sf_interp_an(10,z_final) )
+        #ax.semilogy(x_range, model_f.phi_q_interp_an(x_range,z_final)  * y_sf[abs(x_midp[:] - 10) < 0.1]/model_f.phi_sf_interp_an(10,z_final) )
         ax.set_xlabel('Stellar Mass [log($M_*/M_\odot$)]')
         ax.set_ylabel('$\Phi_{Field}$')
         ax.set_xlim([8.5,12])
@@ -73,8 +75,8 @@ class plot_results:
             fig.savefig('./images/SMF_field.png', dpi=220)
         
         fig,ax = plt.subplots(tight_layout=True)
-        y_sf,_  = np.histogram(model_c.final_mass_cluster_SF, bins=np.arange(6,14,0.2))
-        y_q,_   = np.histogram(model_c.final_mass_cluster_Q, bins=np.arange(6,14,0.2))
+        y_sf,_  = np.histogram(model_c.final_mass_cluster_SF, bins=np.arange(6,14,0.1))
+        y_q,_   = np.histogram(model_c.final_mass_cluster_Q, bins=np.arange(6,14,0.1))
         
         
         ax.scatter(x_midp, y_sf, c='b', marker='x')
@@ -82,8 +84,8 @@ class plot_results:
         ax.scatter(x_midp, y_q, c='r', marker='x')
         ax.semilogy(x_midp, y_q, color='r', alpha=0.5)
         
-        ax.semilogy(x_range, model_c.phi_sf_interp_an(x_range,z_final) * y_sf[abs(x_midp[:] - 10) < 0.1]/model_c.phi_sf_interp_an(10,z_final) )
-        ax.semilogy(x_range, model_c.phi_q_interp_an(x_range,z_final)  * y_sf[abs(x_midp[:] - 10) < 0.1]/model_c.phi_sf_interp_an(10,z_final) )
+        # ax.semilogy(x_range, model_c.phi_sf_interp_an(x_range,z_final) * y_sf[abs(x_midp[:] - 10) < 0.1]/model_c.phi_sf_interp_an(10,z_final) )
+        # ax.semilogy(x_range, model_c.phi_q_interp_an(x_range,z_final)  * y_sf[abs(x_midp[:] - 10) < 0.1]/model_c.phi_sf_interp_an(10,z_final) )
         ax.set_xlabel('Stellar Mass [log($M_*/M_\odot$)]')
         ax.set_ylabel('$\Phi_{Cluster}$')
         ax.set_xlim([8.5,12])
@@ -91,11 +93,11 @@ class plot_results:
             fig.savefig('./images/SMF_cluster.png', dpi=220)
         
     def QFs_QE(self, model_c, model_f):
-        hist_sf_field, bins   = np.histogram(model_f.final_mass_field_SF, bins=np.arange(6,14,0.2))
-        hist_q_field, bins    = np.histogram(model_f.final_mass_field_Q, bins=np.arange(6,14,0.2))
+        hist_sf_field, bins   = np.histogram(model_f.final_mass_field_SF, bins=np.arange(6,14,0.1))
+        hist_q_field, bins    = np.histogram(model_f.final_mass_field_Q, bins=np.arange(6,14,0.1))
         
-        hist_sf_cluster, bins = np.histogram(model_c.final_mass_cluster_SF, bins=np.arange(6,14,0.2))
-        hist_q_cluster, bins  = np.histogram(model_c.final_mass_cluster_Q, bins=np.arange(6,14,0.2))
+        hist_sf_cluster, bins = np.histogram(model_c.final_mass_cluster_SF, bins=np.arange(6,14,0.1))
+        hist_q_cluster, bins  = np.histogram(model_c.final_mass_cluster_Q, bins=np.arange(6,14,0.1))
         
         bins_midp = (bins[:-1] + bins[1:])/2
         QF_field  = hist_q_field / (hist_q_field + hist_sf_field)

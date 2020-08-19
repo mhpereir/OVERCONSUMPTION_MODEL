@@ -8,7 +8,7 @@ from astropy.cosmology import Planck15 as cosmo, z_at_value
 z_init      = 10
 z_final     = 1
 
-M0_range   = np.power(10, np.arange(8,11.1,0.1))
+M0_range   = np.power(10, np.arange(8.7,11.1,0.1))
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
@@ -21,11 +21,11 @@ def epsilon_in(Mh,z):
         return 0
     else:
         #print(z)
-        return 0.7 * (np.minimum(z,2)*3/4 + 1/2)
+        return 0.7 * (np.minimum(z,2.2)/4.4 + 1/2)
     
 #epsilon_in = 0.7        #accretion efficiency
 f_b        = 0.18        #baryon fraction
-alpha      = 1.5           #mass loading factor
+alpha      = 1.5         #mass loading factor
 R          = 0.56        #chambrier return factor
 def delta_Mgas(delta_Mh, SFR, Mh, z):
     M_in  = epsilon_in(Mh,z) * f_b * delta_Mh
@@ -111,11 +111,16 @@ for M0 in M0_range:
     t_final = cosmo.age(z_final).value
     t       = t_init
     dt      = 0.01
-        
+    
+    print(np.log10(M0))
+    
     while t < t_final:
         z = z_at_value(cosmo.age,t*u.Gyr, zmin=-1e-6)
         
         dMh = delta_Mhalo(inits[0],z) *dt*1e9
+        
+        print(np.log10(dMh))
+        
         sfr = SFR(inits[1], z)        *dt*1e9
         dMg = delta_Mgas(dMh, sfr, inits[0],z) #   *dt*1e9
         
