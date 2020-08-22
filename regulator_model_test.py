@@ -6,7 +6,7 @@ from astropy import units as u
 from astropy.cosmology import Planck15 as cosmo, z_at_value
 
 z_init      = 10
-z_final     = 1
+z_final     = 0
 
 M0_range   = np.power(10, np.arange(8.7,11.1,0.1))
 
@@ -25,7 +25,7 @@ def epsilon_in(Mh,z):
     
 #epsilon_in = 0.7        #accretion efficiency
 f_b        = 0.18        #baryon fraction
-alpha      = 1.5         #mass loading factor
+alpha      = 1           #mass loading factor
 R          = 0.56        #chambrier return factor
 def delta_Mgas(delta_Mh, SFR, Mh, z):
     M_in  = epsilon_in(Mh,z) * f_b * delta_Mh

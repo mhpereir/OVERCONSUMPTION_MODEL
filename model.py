@@ -34,7 +34,7 @@ class PENG_model:
         
         self.f_bar   = 0.18
         self.f_strip = 0
-        self.R       = 0.4
+        self.R       = 0.56
         
         self.step    = 0.01 #Gyr
         
@@ -324,14 +324,14 @@ class PENG_model:
     def parse_masked_mass_field(self):
         ssfr = self.SFR(self.gmass, self.z_final) / self.smass
                 
-        self.final_mass_field_SF = np.log10(self.smass[ssfr >= 1e-10])
-        self.final_mass_field_Q  = np.log10(self.smass[ssfr <  1e-10])
+        self.final_mass_field_SF = np.log10(self.smass[ssfr >= 5e-10])
+        self.final_mass_field_Q  = np.log10(self.smass[ssfr <  5e-10])
     
     def parse_masked_mass_cluster(self):
         ssfr = self.SFR(self.cluster_gmass, self.z_final) / self.cluster_smass
                 
-        self.final_mass_cluster_SF = np.log10(self.cluster_smass[ssfr >= 1e-10])
-        self.final_mass_cluster_Q  = np.log10(self.cluster_smass[ssfr <  1e-10])
+        self.final_mass_cluster_SF = np.log10(self.cluster_smass[ssfr >= 5e-10])
+        self.final_mass_cluster_Q  = np.log10(self.cluster_smass[ssfr <  5e-10])
     
     def DE(self, item, t):
         Mhalo = item[0]
