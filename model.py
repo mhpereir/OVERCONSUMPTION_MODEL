@@ -618,7 +618,7 @@ class PENG_model:
         
         print(delta_t)
         
-        if delta_t >= 0.2: #Gyr
+        if delta_t >= 0.1: #Gyr
             n                  = len(self.sf_masses)
             self.ssfr_params   = self.gen_ssfr_params(n)
             

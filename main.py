@@ -13,15 +13,15 @@ z_init_cluster = 10
 z_final = 1
 
 cluster_mass = 13.5  #log10(Mhalo)
-n_clusters   = 100000
+n_clusters   = 30000
 
 oc_flag      = True  # flag for overconsumption model. 
-oc_eta       = 0     # mass-loading factor
+oc_eta       = 0.5     # mass-loading factor
 
 plot_flag    = True
 savefigs     = True
 
-n_cores      = 4
+n_cores      = 1
 n_spare      = 0
 
 if __name__ == "__main__":

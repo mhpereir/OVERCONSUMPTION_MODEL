@@ -14,7 +14,11 @@ class plot_results:
             self.init_pop(model_c)
             self.final_pop(model_c, model_f)
             
+            self.SMF_total(model_c, model_f)
+            
             self.QFs_QE(model_c, model_f)
+            
+            
             
             self.delay_times(model_c)
             
@@ -52,7 +56,7 @@ class plot_results:
         '''
         
         z_final = model_f.z_final
-        x_range = np.arange(8,12,0.1)
+        x_range = np.arange(8,11.51,0.1)
         
         fig,ax = plt.subplots(tight_layout=True)
         y_sf,x_sf = np.histogram(model_f.final_mass_field_SF, bins=np.arange(6,14,0.2))
@@ -64,11 +68,11 @@ class plot_results:
         ax.scatter(x_midp, y_q, c='r', marker='x')
         ax.semilogy(x_midp, y_q, color='r', alpha=0.5)
         
-        ax.semilogy(x_range, model_f.phi_sf_interp_an(x_range,z_final) * y_sf[abs(x_midp[:] - 10) < 0.1]/model_f.phi_sf_interp_an(10,z_final) )
-        ax.semilogy(x_range, model_f.phi_q_interp_an(x_range,z_final)  * y_sf[abs(x_midp[:] - 10) < 0.1]/model_f.phi_sf_interp_an(10,z_final) )
+        ax.semilogy(x_range, self.remko_SF_f(x_range) * y_sf[abs(x_midp[:] - 10) < 0.1]/self.remko_SF_f(10), linestyle='--' )
+        ax.semilogy(x_range, self.remko_Q_f(x_range)  * y_sf[abs(x_midp[:] - 10) < 0.1]/self.remko_SF_f(10), linestyle='--' )
         ax.set_xlabel('Stellar Mass [log($M_*/M_\odot$)]')
         ax.set_ylabel('$\Phi_{Field}$')
-        ax.set_xlim([8.5,12])
+        ax.set_xlim([8.5,11.5])
         if self.savefigs:
             fig.savefig('./images/SMF_field.png', dpi=220)
         
@@ -82,11 +86,12 @@ class plot_results:
         ax.scatter(x_midp, y_q, c='r', marker='x')
         ax.semilogy(x_midp, y_q, color='r', alpha=0.5)
         
-        ax.semilogy(x_range, model_c.phi_sf_interp_an(x_range,z_final) * y_sf[abs(x_midp[:] - 10) < 0.1]/model_c.phi_sf_interp_an(10,z_final) )
-        ax.semilogy(x_range, model_c.phi_q_interp_an(x_range,z_final)  * y_sf[abs(x_midp[:] - 10) < 0.1]/model_c.phi_sf_interp_an(10,z_final) )
+        
+        ax.semilogy(x_range, self.remko_SF_c(x_range) * y_sf[abs(x_midp[:] - 10) < 0.1]/self.remko_SF_c(10), linestyle='--' )
+        ax.semilogy(x_range, self.remko_Q_c(x_range)  * y_sf[abs(x_midp[:] - 10) < 0.1]/self.remko_SF_c(10), linestyle='--' )
         ax.set_xlabel('Stellar Mass [log($M_*/M_\odot$)]')
         ax.set_ylabel('$\Phi_{Cluster}$')
-        ax.set_xlim([8.5,12])
+        ax.set_xlim([8.5,11.5])
         if self.savefigs:
             fig.savefig('./images/SMF_cluster.png', dpi=220)
         
@@ -101,11 +106,18 @@ class plot_results:
         QF_field  = hist_q_field / (hist_q_field + hist_sf_field)
         QF_cluster  = hist_q_cluster / (hist_q_cluster + hist_sf_cluster)
         
-        QE = (QF_cluster - QF_field)/(1 - QF_field)
+        QF_field_remko   = self.remko_Q_f(bins_midp) / (self.remko_Q_f(bins_midp) + self.remko_SF_f(bins_midp))
+        QF_cluster_remko = self.remko_Q_c(bins_midp) / (self.remko_Q_c(bins_midp) + self.remko_SF_c(bins_midp))
+        
+        QE       = (QF_cluster - QF_field)/(1 - QF_field)
+        QE_remko = (QF_cluster_remko - QF_field_remko)/(1 - QF_field_remko)
         
         fig,ax = plt.subplots()
         ax.plot(bins_midp, QF_field)
         ax.plot(bins_midp, QF_cluster)
+        
+        ax.plot(bins_midp, QF_field_remko, linestyle='--', color='C0')
+        ax.plot(bins_midp, QF_cluster_remko, linestyle='--', color='C1')
         ax.set_xlabel('Stellar Mass [log($M_*/M_\odot$)]')
         ax.set_ylabel('Quenched Fraction')
         ax.set_xlim([9,11.5])
@@ -114,12 +126,49 @@ class plot_results:
         
         fig,ax = plt.subplots()
         ax.plot(bins_midp, QE)
+        ax.plot(bins_midp, QE_remko, linestyle='--', color='k')
         ax.set_xlim([9,11.5])
         ax.set_xlabel('Stellar Mass [log($M_*/M_\odot$)]')
         ax.set_ylabel('Quenching Efficiency')
         if self.savefigs:
             fig.savefig('./images/QE.png', dpi=220)
+    
+    def SMF_total(self, model_c, model_f):
+        hist_sf_field, bins   = np.histogram(model_f.final_mass_field_SF, bins=np.arange(6,14,0.2))
+        hist_q_field, bins    = np.histogram(model_f.final_mass_field_Q, bins=np.arange(6,14,0.2))
         
+        hist_sf_cluster, bins = np.histogram(model_c.final_mass_cluster_SF, bins=np.arange(6,14,0.2))
+        hist_q_cluster, bins  = np.histogram(model_c.final_mass_cluster_Q, bins=np.arange(6,14,0.2))
+        
+        bins_midp = (bins[:-1] + bins[1:])/2
+        
+        fig,ax = plt.subplots()
+        
+        SMF_total_f       = hist_sf_field+hist_q_field
+        SMF_total_c       = hist_sf_cluster+hist_q_cluster
+        
+        x_range = np.arange(8,11.51,0.1)
+        SMF_total_f_remco = self.remko_SF_f(x_range)+self.remko_Q_f(x_range)
+        SMF_total_c_remco = self.remko_SF_c(x_range)+self.remko_Q_c(x_range)
+        
+        ax.plot(bins_midp, SMF_total_f, color='k')
+        
+        ax.semilogy(x_range, SMF_total_f_remco * hist_sf_field[abs(bins_midp[:] - 10) < 0.1]/self.remko_SF_f(10), linestyle='--', color='k')
+        ax.set_xlabel('Stellar Mass [log($M_*/M_\odot$)]')
+        ax.set_ylabel('$\Phi_{Field}$')
+        ax.set_xlim([9,11.5])
+        if self.savefigs:
+            fig.savefig('./images/SMF_total_field.png', dpi=220)
+        
+        fig,ax = plt.subplots()
+        ax.plot(bins_midp, hist_sf_cluster+hist_q_cluster, color='k')
+        ax.semilogy(x_range, SMF_total_c_remco * hist_sf_cluster[abs(bins_midp[:] - 10) < 0.1]/self.remko_SF_c(10), linestyle='--', color='k')
+        ax.set_xlim([9,11.5])
+        ax.set_xlabel('Stellar Mass [log($M_*/M_\odot$)]')
+        ax.set_ylabel('$\Phi_{Cluster}$')
+        if self.savefigs:
+            fig.savefig('./images/SMF_total_cluster.png', dpi=220)
+    
     def delay_times(self, model):
         z_init      = model.z_init
         z_final     = model.z_final
@@ -282,3 +331,34 @@ class plot_results:
         ax.set_ylabel('Stellar Mass [log($M_*/M_\odot$)]')
         if self.savefigs:
             fig.savefig('./images/history_path.png', dpi=220)
+            
+    def remko_SF_c(self,logMs):
+        alpha = -1.34
+        ms    = 10.82
+        phi   = 10.31
+        
+        
+        return phi * np.power(10, (logMs-ms)*(1+alpha)) * np.exp(-np.power(10, (logMs-ms )))
+    
+    def remko_Q_c(self,logMs):
+        alpha = -0.22
+        ms    = 10.73
+        phi   = 52.45
+        
+        
+        return phi * np.power(10, (logMs-ms)*(1+alpha)) * np.exp(-np.power(10, (logMs-ms )))
+    
+    
+    def remko_SF_f(self,logMs):
+        alpha = -1.35
+        ms    = 10.77
+        phi   = 73.50
+        
+        return phi * np.power(10, (logMs-ms)*(1+alpha)) * np.exp(-np.power(10, (logMs-ms )))
+    
+    def remko_Q_f(self,logMs):
+        alpha = -0.26
+        ms    = 10.70
+        phi   = 92.32
+        
+        return phi * np.power(10, (logMs-ms)*(1+alpha)) * np.exp(-np.power(10, (logMs-ms )))
