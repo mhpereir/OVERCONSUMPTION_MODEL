@@ -12,7 +12,7 @@ class integration_utils():
         self.DE   = DE
         self.step = self.hmin
         
-        self.n_cores = 4
+        self.n_cores = 1
         
     def RK45(self,p, inits,r,force, mpp, analytic): # analytic tells whether the Rk45 is being used for the gen_analytic_field or not
         f          = self.DE

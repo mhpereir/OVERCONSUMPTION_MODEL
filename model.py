@@ -15,26 +15,39 @@ from utils import integration_utils
 #import matplotlib.pyplot as plt
 
 class PENG_model:
-    def __init__(self, params, z_i, z_f): 
+    def __init__(self, params, z_i): 
         self.logM_min  = params['model_setup']['logM_min']    # minimum sampled mass from init SF population
         self.logM_max  = params['model_setup']['logM_max']    # maximum //
         self.logM_std  = params['model_setup']['logM_std']    # std of MCMC - Metropolis-hastings sampler
         self.f_s_limit = params['model_setup']['f_s_limit']   # lower limit in the stellar mass fraction of galaxy halo
+        self.ssfr_update_time_interval = params['model_setup']['update_time']  # time between updating the SFR parametrization (scatter)
+        
+        self.sSFR_key  = params['model_setup']['sSFR']   # which SFH to use
+        self.n_galax   = params['model_setup']['n_galaxies']      # number of galaxies sampled from init SMF
+        self.cluster_M = params['model_setup']['cluster_M']       # Mass of cluster at z_final (log10)
+        self.n_cluster = params['model_setup']['n_cluster']       # number of clusters generated at once. usefull for smoothing of SMFs
+        
         
         self.x_bins    = np.arange(self.logM_min, 12.01, 0.1)
         self.x_midp    = (self.x_bins[1:] + self.x_bins[:-1])/2
         
-        self.sSFR_key       = params['model_setup']['sSFR']
+
         
         #Cosmology params
         self.omega_m = params['cosmology']['omega_m']
         self.omega_b = params['cosmology']['omega_b']
         self.h       = params['cosmology']['h']
         self.sigma_8 = params['cosmology']['sigma_8']
+        self.f_bar   = params['cosmology']['f_bar']
+        
         
         #Model params
-        self.z_init  = z_i
-        self.z_final = z_f
+        self.z_init   = z_i
+        self.z_final  = params['model_params']['z_final']        
+        self.f_strip  = params['model_params']['f_strip']    # fraction of gas that is stripped
+        self.R        = params['model_params']['R']          # return fraction of gas to interstellar medium
+        self.oc_eta   = params['model_params']['eta']        # mass-loading factor
+        oc_flag       = params['model_params']['eta_flag']   # flag for overconsumption model. 
         
         # Global variables
         self.mass_history = []
@@ -58,6 +71,17 @@ class PENG_model:
             print('Unrecognized sSFR name. Try: Peng; Schreiber or Speagle.')
             sys.exit()
     
+    
+        if oc_flag == 'True':
+            self.oc_flag = True
+            
+        elif oc_flag == 'False':
+            self.oc_flag = False
+        
+        else:
+            print('Unrecognized variable for oc_flag. Check params.json')
+            sys.exit()
+    
     ###  Schechter Stuff ###
     def schechter_SMF_prob(self, logMs):
         if logMs > self.logM_min and logMs <= self.logM_max:
@@ -72,13 +96,13 @@ class PENG_model:
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     
     ### PENG Monte Carlo Model ###
-    def gen_galaxies(self,N):
+    def gen_galaxies(self):
         start_time = time()
         list_masses = []
         x_0 = np.random.rand()*(self.logM_max-self.logM_min) + self.logM_min
         n   = 0
         
-        while n < N:
+        while n < self.n_galax:
             x_1 = np.random.normal(x_0, self.logM_std)
             
             p0 = self.schechter_SMF_prob(x_0)
@@ -150,15 +174,12 @@ class PENG_model:
             self.phi_sf_interp = interp1d(self.x_midp, hist_sf, fill_value="extrapolate")
             self.phi_q_interp  = interp1d(self.x_midp, hist_q , fill_value="extrapolate")
             
-    def gen_cluster(self, cluster_mass, n_clusters, oc_flag, oc_eta):
+    def gen_cluster(self):
         '''
         Generates the cluster. Samples N galaxies from the star forming galaxy array
         '''
-        self.logM0     = cluster_mass
+        self.logM0     = self.cluster_M
         self.z_0       = self.z_final
-        self.n_cluster = n_clusters
-        self.oc_flag   = oc_flag  #toggle for applying OC in the model
-        self.oc_eta    = oc_eta
         
         self.MQ_flags  = []
         self.OC_flags  = []
@@ -618,7 +639,7 @@ class PENG_model:
         
         print(delta_t)
         
-        if delta_t >= 0.1: #Gyr
+        if delta_t >= self.ssfr_update_time_interval: #Gyr
             n                  = len(self.sf_masses)
             self.ssfr_params   = self.gen_ssfr_params(n)
             
@@ -636,28 +657,18 @@ class PENG_model:
     def t_delay(self, item):
         M_star, ssfr_p, M_halo, z = item[0],item[1],item[2],item[3]
         
-        #delay time params
-        f_bar   = 0.17
-        f_strip = 0
-        R       = 0.4
-        
         logMs   = np.ma.log10(M_star)
         
         f_star    = M_star/M_halo
         #f_cold    = 0.1*(1+np.minimum(z,2))**2 * f_star
         f_cold    = self.M_cold(logMs, z, ssfr_p)/M_halo
         
-        num       = f_bar - f_cold - f_star * (1 + self.oc_eta*(1+R)) - f_strip
-        den       = f_star * (1 - R + self.oc_eta) * self.sSFR(logMs, z, ssfr_p)
+        num       = self.f_bar - f_cold - f_star * (1 + self.oc_eta*(1+self.R)) - self.f_strip
+        den       = f_star * (1 - self.R + self.oc_eta) * self.sSFR(logMs, z, ssfr_p)
         return (num/den)/(1e9) #gyr
         
     def t_delay_2(self, M_halo, z):
-        
-        #delay time params
-        f_bar   = 0.17
-        f_strip = 0
-        R       = 0.4
-        
+                
         M_star     = self.M_star(M_halo,z)
         logMs      = np.log10(M_star)
         
@@ -665,8 +676,8 @@ class PENG_model:
         f_cold    = 0.1*(1+np.minimum(z,2))**2 * f_star
         #f_cold    = self.M_cold(logMs, z)/M_halo
         
-        num       = f_bar - f_cold - f_star * (1 + self.oc_eta*(1+R)) - f_strip
-        den       = f_star * (1 - R + self.oc_eta) * self.sSFR(logMs, z)
+        num       = self.f_bar - f_cold - f_star * (1 + self.oc_eta*(1+self.R)) - self.f_strip
+        den       = f_star * (1 - self.R + self.oc_eta) * self.sSFR(logMs, z)
         return (num/den)/(1e9) #gyr
         
     
