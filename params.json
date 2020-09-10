@@ -14,9 +14,9 @@
         "show_plots"  :"True"
     },
     "model_params" :{
-        "z_init_field"   :10,
-        "z_init_cluster" :10,
-        "z_final"        :1,
+        "z_init_field"   :1.5,
+        "z_init_cluster" :1.5,
+        "z_final"        :0,
         "eta"            :0.5,
         "eta_flag"       :"True",
         "f_strip"        :0,

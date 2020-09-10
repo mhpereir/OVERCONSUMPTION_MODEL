@@ -83,13 +83,31 @@ class PENG_model:
             sys.exit()
     
     ###  Schechter Stuff ###
-    def schechter_SMF_prob(self, logMs):
-        if logMs > self.logM_min and logMs <= self.logM_max:
-            Density = 1e-5 * np.power(10, (logMs-10.6)*(1-1.4)) * np.exp(-np.power(10, (logMs-10.6 )))
-        else:
-            Density = 0
-        return Density
+    def remko_SF_c(self,logMs):
+        alpha = -1.34
+        ms    = 10.82
+        phi   = 10.31
+        return phi * np.power(10, (logMs-ms)*(1+alpha)) * np.exp(-np.power(10, (logMs-ms )))
     
+    def remko_Q_c(self,logMs):
+        alpha = -0.22
+        ms    = 10.73
+        phi   = 52.45
+        return phi * np.power(10, (logMs-ms)*(1+alpha)) * np.exp(-np.power(10, (logMs-ms )))
+        
+    def remko_SF_f(self,logMs):
+        alpha = -1.35
+        ms    = 10.77
+        phi   = 73.50
+        return phi * np.power(10, (logMs-ms)*(1+alpha)) * np.exp(-np.power(10, (logMs-ms )))
+
+        
+    def remko_Q_f(self,logMs):
+        alpha = -0.26
+        ms    = 10.70
+        phi   = 92.32
+        return phi * np.power(10, (logMs-ms)*(1+alpha)) * np.exp(-np.power(10, (logMs-ms )))
+        
     def schechter_SMF_func(self, logMs):
         Density = 1e-5 * np.power(10, (logMs-10.6)*(1-1.4)) * np.exp(-np.power(10, (logMs-10.6 )))
         return Density
@@ -97,6 +115,19 @@ class PENG_model:
     
     ### PENG Monte Carlo Model ###
     def gen_galaxies(self):
+        
+        self.masses_sf_f = None
+        self.masses_sf_c = None
+        self.masses_q_f  = None
+        self.masses_q_c  = None
+        
+        self.gen_galx_func(self.remko_SF_f, self.masses_sf_f)
+        self.gen_galx_func(self.remko_Q_f,  self.masses_q_f)
+        
+        self.gen_galx_func(self.remko_SF_c, self.masses_sf_c)
+        self.gen_galx_func(self.remko_Q_c,  self.masses_q_c)
+    
+    def gen_galx_func(self, func, out_var):
         start_time = time()
         list_masses = []
         x_0 = np.random.rand()*(self.logM_max-self.logM_min) + self.logM_min
@@ -105,8 +136,11 @@ class PENG_model:
         while n < self.n_galax:
             x_1 = np.random.normal(x_0, self.logM_std)
             
-            p0 = self.schechter_SMF_prob(x_0)
-            p1 = self.schechter_SMF_prob(x_1)
+            p0 = func(x_0)
+            if x_1 > self.logM_min and x_1 <= self.logM_max:
+                p1 = func(x_1)
+            else:
+                p1 = 0
             
             if np.random.rand() < p1/p0:
                 x_0 = x_1
@@ -117,10 +151,10 @@ class PENG_model:
         
         print('Time to generate population: {:.2f} m.'.format( (time() - start_time)/60  ))
         
-        self.sf_masses   = np.array(list_masses, copy=True)
-        self.sf_masses   = self.sf_masses[self.sf_masses > (self.logM_min + self.logM_std)]
-        self.sf_masses   = self.sf_masses[self.sf_masses < (self.logM_max - self.logM_std)]
-        list_masses      = None
+        out_var     = np.array(list_masses, copy=True)
+        out_var     = out_var[out_var > (self.logM_min + self.logM_std)]
+        out_var     = out_var[out_var < (self.logM_max - self.logM_std)]
+        list_masses = None
     
     def setup_evolve(self):
         t_init       = cosmo.lookback_time(self.z_init).value #gyr
@@ -137,9 +171,8 @@ class PENG_model:
         
         self.ssfr_params = self.gen_ssfr_params(len(self.sf_masses))
     
-        self.phi_sf_interp = self.schechter_SMF_func
-    def phi_q_interp(self,logMs):
-        return np.zeros(logMs.shape)
+        self.phi_sf_interp = self.remko_SF_f
+        self.phi_q_interp  = self.remko_Q_f
     
     def evolve_field(self, p):        
         if self.z <= 3:
